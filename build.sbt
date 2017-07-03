@@ -22,7 +22,7 @@ lazy val commonSettings = Seq(
 )
 
 
-lazy val core = (project in file("core"))
+lazy val kernel = (project in file("kernel"))
   .settings(commonSettings: _*)
   .settings(
     //add other settings
@@ -32,6 +32,6 @@ lazy val core = (project in file("core"))
     libraryDependencies += "org.scalatest" %% "scalatest"   % "3.0.1" % "test"
   )
 
-lazy val kernel = (project in file("kernel"))
-  .dependsOn(core)
+lazy val core = (project in file("core"))
+  .dependsOn(kernel)
   .settings(commonSettings: _*)
