@@ -27,7 +27,10 @@ object Stream {
   class Ops[F[_]](implicit I: Inject[Stream, F]) {
     def next: Free[F, Option[Data]] = inject[Stream, F](Next)
   }
-  implicit def ops[F[_]](implicit I: Inject[Stream, F]) = new Ops[F]
+
+  object Ops {
+    implicit def ops[F[_]](implicit I: Inject[Stream, F]) = new Ops[F]
+  }
 }
 
 /**

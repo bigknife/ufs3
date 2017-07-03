@@ -40,8 +40,9 @@ object Backup {
     def close(address: BackupAddress): Free[F, Response[Unit]] = inject[Backup, F](Close(address))
     def stopServing(address: BackupAddress): Free[F, Response[Unit]] = inject[Backup, F](StopServing(address))
   }
-
-  implicit def ops[F[_]](implicit I: Inject[Backup, F]) = new Ops[F]
+  object Ops {
+      implicit def ops[F[_]](implicit I: Inject[Backup, F]) = new Ops[F]
+  }
 }
 
 /**

@@ -29,7 +29,9 @@ object Audit {
     def process(auditInfo: ProcessAudit): Free[F, Unit] = inject[Audit, F](Process(auditInfo))
     def end(auditInfo: EndAudit): Free[F, Unit] = inject[Audit, F](End(auditInfo))
   }
-  implicit def ops[F[_]](implicit I: Inject[Audit, F]) = new Ops[F]
+  object Ops {
+    implicit def ops[F[_]](implicit I: Inject[Audit, F]) = new Ops[F]
+  }
 }
 
 /**
