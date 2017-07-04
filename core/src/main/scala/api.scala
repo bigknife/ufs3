@@ -91,7 +91,7 @@ object api {
   /**
     * append data stream
     */
-  def appendData[F[_]](filler: Filler)(implicit L: Log.Ops[F],
+  def appendData[F[_]](filler: WritableFiller)(implicit L: Log.Ops[F],
                                        S: Store.Ops[F],
                                        STREAM: Stream.Ops[F],
                                        B: Backup.Ops[F]): Free[F, Response[Unit]] = {
