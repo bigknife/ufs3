@@ -38,7 +38,9 @@ object Store {
 
   case class FreeSpace(filler: Filler) extends Store[Response[Size]]
   case class IsWriting(filler: Filler) extends Store[Response[Boolean]]
-  case class Writable(filler: Filler)  extends Store[Response[Option[WritableFiller]]]
+
+  case class Writable(filler: Filler) extends Store[Response[Option[WritableFiller]]]
+  case class Readable(filler: Filler) extends Store[Response[Option[ReadonlyFiller]]]
 
   class Ops[F[_]](implicit I: Inject[Store, F]) {
     import Free._
@@ -58,9 +60,11 @@ object Store {
     def lock(filler: Filler): Free[F, Response[Unit]]   = inject[Store, F](Lock(filler))
     def unlock(filler: Filler): Free[F, Response[Unit]] = inject[Store, F](UnLock(filler))
 
-    def freeSpace(filler: Filler): Free[F, Response[Size]]                  = inject[Store, F](FreeSpace(filler))
-    def isWriting(filler: Filler): Free[F, Response[Boolean]]               = inject[Store, F](IsWriting(filler))
+    def freeSpace(filler: Filler): Free[F, Response[Size]]    = inject[Store, F](FreeSpace(filler))
+    def isWriting(filler: Filler): Free[F, Response[Boolean]] = inject[Store, F](IsWriting(filler))
+
     def writable(filler: Filler): Free[F, Response[Option[WritableFiller]]] = inject[Store, F](Writable(filler))
+    def readable(filler: Filler): Free[F, Response[Option[ReadonlyFiller]]] = inject[Store, F](Readable(filler))
   }
   object Ops {
     implicit def toOps[F[_]](implicit I: Inject[Store, F]): Ops[F] = new Ops[F]

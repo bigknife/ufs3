@@ -34,6 +34,9 @@ object Stream {
 
     //todo: add a transformer to Store.Data
     implicit val storeDataTransformer = new DataTransformer[ufs3.kernel.store.Data](sd ⇒ ???)
+
+    //todo: add a transformer to Backup.Data
+    implicit val backupDataTransformer = new DataTransformer[ufs3.kernel.backup.Data](sd ⇒ ???)
   }
 }
 
