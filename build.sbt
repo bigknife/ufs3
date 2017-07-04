@@ -1,7 +1,6 @@
 import sbt.Keys._
 import coursier._
 
-
 //moodify your orgnization and version
 lazy val commonSettings = Seq(
   scalaVersion in ThisBuild := "2.11.8",
@@ -21,15 +20,18 @@ lazy val commonSettings = Seq(
   )
 )
 
+lazy val interpreter = (project in file("interpreter"))
+  .settings(commonSettings: _*)
+  .dependsOn(kernel)
 
 lazy val kernel = (project in file("kernel"))
   .settings(commonSettings: _*)
   .settings(
     //add other settings
-    libraryDependencies += "org.typelevel" %% "cats"        % "0.9.0",
+    libraryDependencies += "org.typelevel" %% "cats" % "0.9.0",
     libraryDependencies += "org.typelevel" %% "cats-effect" % "0.3",
-    libraryDependencies += "org.scalactic" %% "scalactic"   % "3.0.1",
-    libraryDependencies += "org.scalatest" %% "scalatest"   % "3.0.1" % "test"
+    libraryDependencies += "org.scalactic" %% "scalactic" % "3.0.1",
+    libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.1" % "test"
   )
 
 lazy val core = (project in file("core"))

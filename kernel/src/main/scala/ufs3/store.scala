@@ -5,10 +5,12 @@
   * @author: bigknife@outlook.com
   * @create: 2017/07/03
   */
-
 package ufs3
 package kernel
 package store
+
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
 
 import scala.language.higherKinds
 import scala.language.implicitConversions
@@ -23,7 +25,7 @@ object Store {
   type Response[A] = Either[Throwable, A]
 
   case class Existed(path: Path) extends Store[Response[Boolean]]
-  case class IsLegal(path: Path) extends Store[Response[Boolean]]
+  case class IsLegal(filler: Filler) extends Store[Response[Boolean]]
 
   case class Create(path: Path, size: Size) extends Store[Response[Filler]]
   case class Delete(path: Path) extends Store[Response[Unit]]
@@ -40,26 +42,44 @@ object Store {
   case class FreeSpace(filler: Filler) extends Store[Response[Size]]
   case class IsWriting(filler: Filler) extends Store[Response[Boolean]]
 
-  class Ops[F[_]](implicit I: Inject[Store, F]){
+  case class SeekTo(filler: Filler, position: Position)
+      extends Store[Response[Unit]]
+
+  class Ops[F[_]](implicit I: Inject[Store, F]) {
     import Free._
 
-    def existed(path: Path): Free[F, Response[Boolean]] = inject[Store, F](Existed(path))
-    def isLegal(path: Path): Free[F, Response[Boolean]] = inject[Store, F](IsLegal(path))
+    def existed(path: Path): Free[F, Response[Boolean]] =
+      inject[Store, F](Existed(path))
+    def isLegal(filler: Filler): Free[F, Response[Boolean]] =
+      inject[Store, F](IsLegal(filler))
 
-    def create(path: Path, size: Size): Free[F, Response[Filler]] = inject[Store, F](Create(path, size))
-    def delete(path: Path): Free[F, Response[Unit]] = inject[Store, F](Delete(path))
+    def create(path: Path, size: Size): Free[F, Response[Filler]] =
+      inject[Store, F](Create(path, size))
+    def delete(path: Path): Free[F, Response[Unit]] =
+      inject[Store, F](Delete(path))
 
-    def open(path: Path, mode: FileMode): Free[F, Response[Filler]] = inject[Store, F](Open(path, mode))
-    def close(filler: Filler): Free[F, Response[Unit]] = inject[Store, F](Close(filler))
+    def open(path: Path, mode: FileMode): Free[F, Response[Filler]] =
+      inject[Store, F](Open(path, mode))
+    def close(filler: Filler): Free[F, Response[Unit]] =
+      inject[Store, F](Close(filler))
 
-    def read(filler: Filler, size: Size): Free[F, Response[Data]] = inject[Store, F](Read(filler, size))
-    def write(filler: Filler, data: Data): Free[F, Response[Unit]] = inject[Store, F](Write(filler, data))
+    def read(filler: Filler, size: Size): Free[F, Response[Data]] =
+      inject[Store, F](Read(filler, size))
+    def write(filler: Filler, data: Data): Free[F, Response[Unit]] =
+      inject[Store, F](Write(filler, data))
 
-    def lock(filler: Filler): Free[F, Response[Unit]] = inject[Store, F](Lock(filler))
-    def unlock(filler: Filler): Free[F, Response[Unit]] = inject[Store, F](UnLock(filler))
+    def lock(filler: Filler): Free[F, Response[Unit]] =
+      inject[Store, F](Lock(filler))
+    def unlock(filler: Filler): Free[F, Response[Unit]] =
+      inject[Store, F](UnLock(filler))
 
-    def freeSpace(filler: Filler): Free[F, Response[Size]] = inject[Store, F](FreeSpace(filler))
-    def isWriting(filler: Filler): Free[F, Response[Boolean]] = inject[Store, F](IsWriting(filler))
+    def freeSpace(filler: Filler): Free[F, Response[Size]] =
+      inject[Store, F](FreeSpace(filler))
+    def isWriting(filler: Filler): Free[F, Response[Boolean]] =
+      inject[Store, F](IsWriting(filler))
+
+    def seekTo(filler: Filler, position: Position): Free[F, Response[Unit]] =
+      inject[Store, F](SeekTo(filler, position))
   }
   object Ops {
     implicit def toOps[F[_]](implicit I: Inject[Store, F]): Ops[F] = new Ops[F]
@@ -78,7 +98,7 @@ sealed trait Path {
 }
 object Path {
   def apply(p: String): Path = new Path {
-    def file: Eval[File] = Eval.later(new File(p))
+    def file: Eval[File] = Eval.always(new File(p))
   }
 }
 
@@ -89,12 +109,26 @@ object Path {
   * file is just like filling blank. That's the name is from.
   */
 sealed trait Filler {
+
+  def blockSize: Size
+
+  def path: Path
+
+  def underlying: RandomAccessFile
+
+  override def toString: String = path.file.value.getPath
+}
+
+object Filler {
+  trait FileFiller extends Filler
+
+  trait IndexFiller extends Filler
 }
 
 /**
   * FileMode
   * --------
-  * The mode used to Read/Write a file. 
+  * The mode used to Read/Write a file.
   * - ReadOnly: the file opened readonly
   * - ReadWrite: the file opened readable and writable
   */
@@ -116,7 +150,7 @@ object FileMode {
   * ----
   * Wrapper of Long, to identity the file length in bytes
   */
-sealed trait Size{
+sealed trait Size {
   def sizeInByte: Long
 }
 
@@ -145,5 +179,22 @@ object Size {
   * ----
   * Wrapper of data block
   */
-sealed trait Data{
+sealed trait Data {
+  def content: ByteBuffer
+}
+
+object Data {
+  def apply(buffer: ByteBuffer): Data = new Data {
+    override def content: ByteBuffer = buffer
+  }
+}
+
+sealed trait Position {
+  def value: Long
+}
+
+object Position {
+  def apply(v: Long): Position = new Position {
+    override def value: Long = v
+  }
 }
