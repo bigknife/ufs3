@@ -6,11 +6,10 @@ import java.nio.channels.{FileChannel, FileLock}
 import java.util.concurrent.Semaphore
 
 import cats.{Id, ~>}
-import ufs3.kernel.store.Filler.FileFiller
-import ufs3.kernel.store._
-import ufs3.kernel.store.Store._
-import Size._
 import ufs3.kernel.store.FileMode.{ReadOnly, ReadWrite}
+import ufs3.kernel.store.Size._
+import ufs3.kernel.store.Store._
+import ufs3.kernel.store._
 
 /**
   * Created by songwenchao on 2017/7/4.
@@ -18,10 +17,10 @@ import ufs3.kernel.store.FileMode.{ReadOnly, ReadWrite}
 object StoreInterpreter {
 
   @volatile private var existedMap = Map.empty[String, Boolean]
-  @volatile private var fillerMap = Map.empty[String, Filler]
-  @volatile private var lockMap = Map.empty[String, FileLock]
+  @volatile private var fillerMap  = Map.empty[String, Filler]
+  @volatile private var lockMap    = Map.empty[String, FileLock]
 
-  private lazy val fillerSemaphore = new Semaphore(1)
+  private lazy val fillerSemaphore  = new Semaphore(1)
   private lazy val existedSemaphore = new Semaphore(1)
 
   private lazy val MAGIC: Array[Byte] = "RRAW".getBytes("iso-8859-1")
@@ -63,7 +62,7 @@ object StoreInterpreter {
     val existed = existedMap.get(path) match {
       case Some(result) ⇒ result
       case None ⇒
-        val file = new File(path)
+        val file   = new File(path)
         val result = file.exists() && file.isFile
         existedMap += (path → result)
         result
@@ -74,20 +73,17 @@ object StoreInterpreter {
 
   def isLegal(filler: Filler): Boolean = {
     if (filler != null && filler.underlying != null) {
-      val channel = filler.underlying.getChannel
+      val channel     = filler.underlying.getChannel
       val magicBuffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, 4)
-      val magicBytes = new Array[Byte](4)
+      val magicBytes  = new Array[Byte](4)
       magicBuffer.get(magicBytes)
       val sizeBuffer = channel.map(FileChannel.MapMode.READ_ONLY, 4, 8)
-      val size = sizeBuffer.getLong()
-      val tailBuffer = channel.map(FileChannel.MapMode.READ_ONLY,
-                                   20,
-                                   filler.underlying.length() - 20)
-      val realSize = tailBuffer.limit()
+      val size       = sizeBuffer.getLong()
+      val tailBuffer = channel.map(FileChannel.MapMode.READ_ONLY, 20, filler.underlying.length() - 20)
+      val realSize   = tailBuffer.limit()
       (MAGIC sameElements magicBytes) && (size == realSize)
     } else
-      throw new IllegalArgumentException(
-        "the file to judge whether legal can not be null")
+      throw new IllegalArgumentException("the file to judge whether legal can not be null")
   }
 
   def create(filePath: String, size: Long): Filler = {
@@ -97,24 +93,14 @@ object StoreInterpreter {
     val finalFile = new File(filePath)
     if (!finalFile.exists()) {
       file.renameTo(finalFile)
-      val raf = new RandomAccessFile(filePath, "rw")
-      raf.setLength(20 + size)
-      raf.write(MAGIC)
-      raf.writeLong(size)
-      raf.writeLong(0)
-      val filler = new FileFiller {
-        override def underlying: RandomAccessFile = raf
-        override def blockSize: Size = size.B
-        override def path: Path = Path(filePath)
-      }
+      val filler = Filler(Path(filePath), size.B, ReadWrite, MAGIC)
       existedMap += (filePath → true)
       fillerSemaphore.release()
       filler
     } else {
       file.delete()
       fillerSemaphore.release()
-      throw new IllegalArgumentException(
-        s"the file $filePath already existed ")
+      throw new IllegalArgumentException(s"the file $filePath already existed ")
     }
   }
 
@@ -132,12 +118,9 @@ object StoreInterpreter {
         val raf = new RandomAccessFile(filePath, mode.mode)
         val sizeBuffer =
           raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 4, 8)
-        val size = sizeBuffer.getLong()
-        new FileFiller {
-          override def underlying: RandomAccessFile = raf
-          override def blockSize: Size = size.B
-          override def path: Path = Path(filePath)
-        }
+        val size   = sizeBuffer.getLong()
+        val filler = Filler(Path(filePath), size.B, mode, Array.empty[Byte])
+        filler
       } else throw new FileNotFoundException(filePath)
     }
 
@@ -175,29 +158,24 @@ object StoreInterpreter {
 
   def read(filler: Filler, size: Long): Data = {
     if (filler != null && filler.underlying != null) {
-      val mappedBuffer = filler.underlying.getChannel.map(
-        FileChannel.MapMode.READ_ONLY,
-        filler.underlying.getChannel.position(),
-        size)
+      val mappedBuffer =
+        filler.underlying.getChannel.map(FileChannel.MapMode.READ_ONLY, filler.underlying.getChannel.position(), size)
       Data(mappedBuffer)
     } else
-      throw new IllegalArgumentException(
-        "the file to read data can not be null")
+      throw new IllegalArgumentException("the file to read data can not be null")
   }
 
   def write(filler: Filler, buffer: ByteBuffer): Unit = {
     if (filler != null && filler.underlying != null) {
-      val channel = filler.underlying.getChannel
-      val tailBuffer = channel.map(FileChannel.MapMode.READ_WRITE, 12, 8)
+      val channel      = filler.underlying.getChannel
+      val tailBuffer   = channel.map(FileChannel.MapMode.READ_WRITE, 12, 8)
       val tailPosition = tailBuffer.getLong()
-      val remainSize = filler.blockSize.sizeInByte - tailPosition
+      val remainSize   = filler.blockSize.sizeInByte - tailPosition
       val size =
         if (buffer.position() != 0) buffer.flip().limit() else buffer.limit()
       if (remainSize >= 0 && remainSize - size >= 0 && size > 0) {
         val mappedBuffer =
-          channel.map(FileChannel.MapMode.READ_WRITE,
-                      tailPosition + 20,
-                      size.toLong)
+          channel.map(FileChannel.MapMode.READ_WRITE, tailPosition + 20, size.toLong)
         mappedBuffer.put(buffer)
         buffer.clear()
         val newPosition = tailPosition + size
@@ -205,11 +183,9 @@ object StoreInterpreter {
         tailBuffer.putLong(newPosition)
         ()
       } else
-        throw new IllegalArgumentException(
-          s"the fdata to write to $filler is too large")
+        throw new IllegalArgumentException(s"the fdata to write to $filler is too large")
     } else
-      throw new IllegalArgumentException(
-        "the file to be written can not be null")
+      throw new IllegalArgumentException("the file to be written can not be null")
   }
 
   def lock(filler: Filler): Unit = {
@@ -219,8 +195,7 @@ object StoreInterpreter {
       lockMap.get(path) match {
         case Some(_) ⇒
           fillerSemaphore.release()
-          throw new IllegalAccessException(
-            s"the file $filler is locked by current APP")
+          throw new IllegalAccessException(s"the file $filler is locked by current APP")
         case None ⇒
           val lock = filler.underlying.getChannel.tryLock()
           if (lock != null) {
@@ -228,13 +203,11 @@ object StoreInterpreter {
             fillerSemaphore.release()
           } else {
             fillerSemaphore.release()
-            throw new IllegalAccessException(
-              s"the file $filler is locked by another APP")
+            throw new IllegalAccessException(s"the file $filler is locked by another APP")
           }
       }
     } else
-      throw new IllegalArgumentException(
-        s"the file $filler to lock can not be null")
+      throw new IllegalArgumentException(s"the file $filler to lock can not be null")
   }
 
   def unlock(filler: Filler): Unit = {
@@ -249,8 +222,7 @@ object StoreInterpreter {
       }
       fillerSemaphore.release()
     } else
-      throw new IllegalArgumentException(
-        s"the file $filler to unlock can not be null")
+      throw new IllegalArgumentException(s"the file $filler to unlock can not be null")
   }
 
   def freeSpace(filler: Filler): Size = {
@@ -260,8 +232,7 @@ object StoreInterpreter {
       val usedSize = tailBuffer.getLong()
       (filler.blockSize.sizeInByte - usedSize).B
     } else
-      throw new IllegalArgumentException(
-        s"the file $filler to get free space can not be null")
+      throw new IllegalArgumentException(s"the file $filler to get free space can not be null")
   }
 
   def isWriting(filler: Filler): Boolean = {
@@ -277,16 +248,14 @@ object StoreInterpreter {
       fillerSemaphore.release()
       status
     } else
-      throw new IllegalArgumentException(
-        s"the file $filler to judge write status can not be null")
+      throw new IllegalArgumentException(s"the file $filler to judge write status can not be null")
   }
 
   def seekTo(filler: Filler, position: Position): Unit = {
     if (filler != null && filler.underlying != null) {
       filler.underlying.seek(20 + position.value)
     } else
-      throw new IllegalArgumentException(
-        "the file to seek position can not be null")
+      throw new IllegalArgumentException("the file to seek position can not be null")
   }
 
   def safeResponse[A](a: ⇒ A): Either[Throwable, A] =

@@ -16,6 +16,7 @@ import scala.language.higherKinds
 import scala.language.implicitConversions
 import cats.free.{Free, Inject}
 import Free._
+import ufs3.kernel.store.FileMode.{ReadOnly, ReadWrite}
 
 /**
   * Store Free Monad
@@ -24,62 +25,55 @@ sealed trait Store[A]
 object Store {
   type Response[A] = Either[Throwable, A]
 
-  case class Existed(path: Path) extends Store[Response[Boolean]]
+  case class Existed(path: Path)     extends Store[Response[Boolean]]
   case class IsLegal(filler: Filler) extends Store[Response[Boolean]]
 
   case class Create(path: Path, size: Size) extends Store[Response[Filler]]
-  case class Delete(path: Path) extends Store[Response[Unit]]
+  case class Delete(path: Path)             extends Store[Response[Unit]]
 
   case class Open(path: Path, mode: FileMode) extends Store[Response[Filler]]
-  case class Close(filler: Filler) extends Store[Response[Unit]]
+  case class Close(filler: Filler)            extends Store[Response[Unit]]
 
-  case class Read(filler: Filler, size: Size) extends Store[Response[Data]]
-  case class Write(filler: Filler, data: Data) extends Store[Response[Unit]]
+  case class Read(filler: Filler, size: Size)          extends Store[Response[Data]]
+  case class Write(filler: WritableFiller, data: Data) extends Store[Response[Unit]]
 
-  case class Lock(filler: Filler) extends Store[Response[Unit]]
+  case class Lock(filler: Filler)   extends Store[Response[Unit]]
   case class UnLock(filler: Filler) extends Store[Response[Unit]]
 
   case class FreeSpace(filler: Filler) extends Store[Response[Size]]
   case class IsWriting(filler: Filler) extends Store[Response[Boolean]]
 
-  case class SeekTo(filler: Filler, position: Position)
-      extends Store[Response[Unit]]
+  case class SeekTo(filler: ReadonlyFiller, position: Position) extends Store[Response[Unit]]
+
+  case class Writable(filler: Filler) extends Store[Response[Option[WritableFiller]]]
+  case class Readable(filler: Filler) extends Store[Response[Option[ReadonlyFiller]]]
 
   class Ops[F[_]](implicit I: Inject[Store, F]) {
     import Free._
 
-    def existed(path: Path): Free[F, Response[Boolean]] =
-      inject[Store, F](Existed(path))
-    def isLegal(filler: Filler): Free[F, Response[Boolean]] =
-      inject[Store, F](IsLegal(filler))
+    def existed(path: Path): Free[F, Response[Boolean]]     = inject[Store, F](Existed(path))
+    def isLegal(filler: Filler): Free[F, Response[Boolean]] = inject[Store, F](IsLegal(filler))
 
-    def create(path: Path, size: Size): Free[F, Response[Filler]] =
-      inject[Store, F](Create(path, size))
-    def delete(path: Path): Free[F, Response[Unit]] =
-      inject[Store, F](Delete(path))
+    def create(path: Path, size: Size): Free[F, Response[Filler]] = inject[Store, F](Create(path, size))
+    def delete(path: Path): Free[F, Response[Unit]]               = inject[Store, F](Delete(path))
 
-    def open(path: Path, mode: FileMode): Free[F, Response[Filler]] =
-      inject[Store, F](Open(path, mode))
-    def close(filler: Filler): Free[F, Response[Unit]] =
-      inject[Store, F](Close(filler))
+    def open(path: Path, mode: FileMode): Free[F, Response[Filler]] = inject[Store, F](Open(path, mode))
+    def close(filler: Filler): Free[F, Response[Unit]]              = inject[Store, F](Close(filler))
 
-    def read(filler: Filler, size: Size): Free[F, Response[Data]] =
-      inject[Store, F](Read(filler, size))
-    def write(filler: Filler, data: Data): Free[F, Response[Unit]] =
-      inject[Store, F](Write(filler, data))
+    def read(filler: Filler, size: Size): Free[F, Response[Data]]          = inject[Store, F](Read(filler, size))
+    def write(filler: WritableFiller, data: Data): Free[F, Response[Unit]] = inject[Store, F](Write(filler, data))
 
-    def lock(filler: Filler): Free[F, Response[Unit]] =
-      inject[Store, F](Lock(filler))
-    def unlock(filler: Filler): Free[F, Response[Unit]] =
-      inject[Store, F](UnLock(filler))
+    def lock(filler: Filler): Free[F, Response[Unit]]   = inject[Store, F](Lock(filler))
+    def unlock(filler: Filler): Free[F, Response[Unit]] = inject[Store, F](UnLock(filler))
 
-    def freeSpace(filler: Filler): Free[F, Response[Size]] =
-      inject[Store, F](FreeSpace(filler))
-    def isWriting(filler: Filler): Free[F, Response[Boolean]] =
-      inject[Store, F](IsWriting(filler))
+    def freeSpace(filler: Filler): Free[F, Response[Size]]    = inject[Store, F](FreeSpace(filler))
+    def isWriting(filler: Filler): Free[F, Response[Boolean]] = inject[Store, F](IsWriting(filler))
 
-    def seekTo(filler: Filler, position: Position): Free[F, Response[Unit]] =
+    def seekTo(filler: ReadonlyFiller, position: Position): Free[F, Response[Unit]] =
       inject[Store, F](SeekTo(filler, position))
+
+    def writable(filler: Filler): Free[F, Response[Option[WritableFiller]]] = inject[Store, F](Writable(filler))
+    def readable(filler: Filler): Free[F, Response[Option[ReadonlyFiller]]] = inject[Store, F](Readable(filler))
   }
   object Ops {
     implicit def toOps[F[_]](implicit I: Inject[Store, F]): Ops[F] = new Ops[F]
@@ -120,10 +114,32 @@ sealed trait Filler {
 }
 
 object Filler {
-  trait FileFiller extends Filler
-
-  trait IndexFiller extends Filler
+  def apply(filePath: Path, size: Size, mode: FileMode, magic: Array[Byte]): Filler = {
+    val raf = new RandomAccessFile(filePath.file.value.getPath, mode.mode)
+    mode match {
+      case ReadOnly ⇒
+        new ReadonlyFiller {
+          override def underlying: RandomAccessFile = raf
+          override def blockSize: Size              = size
+          override def path: Path                   = filePath
+        }
+      case ReadWrite ⇒
+        new WritableFiller {
+          override def underlying: RandomAccessFile = {
+            raf.write(magic)
+            raf.writeLong(size.sizeInByte)
+            raf.writeLong(0)
+            raf
+          }
+          override def blockSize: Size = size
+          override def path: Path      = filePath
+        }
+    }
+  }
 }
+
+sealed trait WritableFiller extends Filler
+sealed trait ReadonlyFiller extends Filler
 
 /**
   * FileMode
