@@ -12,10 +12,11 @@ package stream
 
 import scala.language.higherKinds
 import scala.language.implicitConversions
-
 import cats.free.{Free, Inject}
 import Free._
 import java.nio.ByteBuffer
+
+import ufs3.kernel.stream.Data.DataTransformer
 
 /**
   * Stream adt
@@ -30,12 +31,22 @@ object Stream {
 
   object Ops {
     implicit def ops[F[_]](implicit I: Inject[Stream, F]) = new Ops[F]
+
+    //todo: add a transformer to Store.Data
+    implicit val storeDataTransformer = new DataTransformer[ufs3.kernel.store.Data](sd ⇒ ???)
   }
 }
 
 /**
   * stream data
   */
-sealed trait Data {
+sealed trait Data {self ⇒
+  import Data._
   def byteBuffer: ByteBuffer
+  def to[A](implicit transformer: DataTransformer[A]): A = transformer.run(self)
+}
+
+object Data {
+  final case class DataTransformer[A](run: Data ⇒ A)
+
 }
