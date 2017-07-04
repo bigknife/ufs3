@@ -33,7 +33,7 @@ object Backup {
     def open(): Free[F, Response[Unit]]  = inject[Backup, F](Open)
     def close(): Free[F, Response[Unit]] = inject[Backup, F](Close)
 
-    def send(data: Data): Free[F, Response[Unit]] = inject[Backup, F](Send(address, data))
+    def send(data: Data): Free[F, Response[Unit]] = inject[Backup, F](Send(data))
   }
   object Ops {
     implicit def ops[F[_]](implicit I: Inject[Backup, F]) = new Ops[F]
