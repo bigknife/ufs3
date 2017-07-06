@@ -18,7 +18,7 @@ import cats.data.Coproduct
 import cats.free._
 import ufs3.kernel.block.Block.{Create, Open}
 import ufs3.kernel.filler.Filler
-import ufs3.kernel.filler.Filler.{InitBlock, ValidateBlockFile}
+import ufs3.kernel.filler.Filler.{InitBlock, ValidateBlock}
 
 
 object Mock extends App{
@@ -46,7 +46,7 @@ object Mock extends App{
       case InitBlock(bf) ⇒
         println("filler interpreter: init block")
         Right(())
-      case ValidateBlockFile(bf) ⇒
+      case ValidateBlock(bf) ⇒
         println("filler interpreter: validate block")
         Right(())
     }

@@ -20,7 +20,7 @@ import Free._
 sealed trait Filler[A]
 object Filler {
   final case class InitBlock(bf: BlockFile)     extends Filler[Response[Unit]]
-  final case class ValidateBlockFile(bf: BlockFile) extends Filler[Response[Unit]]
+  final case class ValidateBlock(bf: BlockFile) extends Filler[Response[Unit]]
 
   final class Ops[F[_]](implicit I: Inject[Filler, F]) {
     def openBlock(path: Path, mode: FileMode, size: Size)(implicit B: Block.Ops[F]): Free[F, Response[Unit]] = {
@@ -38,7 +38,7 @@ object Filler {
               rof1 ← B.create(path, size)
               a1 ← rof1 match {
                 case Left(t) ⇒ freeError[F, Unit](t)
-                case Right(bf) ⇒ inject[Filler, F](ValidateBlockFile(bf))
+                case Right(bf) ⇒ inject[Filler, F](ValidateBlock(bf))
               }
             } yield a1
         }
