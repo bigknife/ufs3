@@ -92,9 +92,9 @@ object api {
     * append data stream
     */
   def appendData[F[_]](filler: WritableFiller)(implicit L: Log.Ops[F],
-                                       S: Store.Ops[F],
-                                       STREAM: Stream.Ops[F],
-                                       B: Backup.Ops[F]): Free[F, Response[Unit]] = {
+                                               S: Store.Ops[F],
+                                               STREAM: Stream.Ops[F],
+                                               B: Backup.Ops[F]): Free[F, Response[Unit]] = {
     import S._
     import STREAM._
     import Stream.Ops._
@@ -107,7 +107,7 @@ object api {
               case Some(data) ⇒
                 for {
                   // write and send to backup
-                  _ ← write(filler, data.to[ufs3.kernel.store.Data]).flatMap(_ ⇒
+                  _ ← write(filler, data.to[ufs3.kernel.store.WriteData]).flatMap(_ ⇒
                     B.send(data.to[ufs3.kernel.backup.Data]))
                   a ← streaming()
                 } yield a

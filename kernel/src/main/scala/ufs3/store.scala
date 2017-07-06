@@ -11,6 +11,7 @@ package store
 
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicLong
 
 import scala.language.higherKinds
 import scala.language.implicitConversions
@@ -34,8 +35,8 @@ object Store {
   case class Open(path: Path, mode: FileMode) extends Store[Response[Filler]]
   case class Close(filler: Filler)            extends Store[Response[Unit]]
 
-  case class Read(filler: Filler, size: Size)          extends Store[Response[Data]]
-  case class Write(filler: WritableFiller, data: Data) extends Store[Response[Unit]]
+  case class Read(filler: Filler, size: Size)               extends Store[Response[ReadData]]
+  case class Write(filler: WritableFiller, data: WriteData) extends Store[Response[Unit]]
 
   case class Lock(filler: Filler)   extends Store[Response[Unit]]
   case class UnLock(filler: Filler) extends Store[Response[Unit]]
@@ -60,8 +61,8 @@ object Store {
     def open(path: Path, mode: FileMode): Free[F, Response[Filler]] = inject[Store, F](Open(path, mode))
     def close(filler: Filler): Free[F, Response[Unit]]              = inject[Store, F](Close(filler))
 
-    def read(filler: Filler, size: Size): Free[F, Response[Data]]          = inject[Store, F](Read(filler, size))
-    def write(filler: WritableFiller, data: Data): Free[F, Response[Unit]] = inject[Store, F](Write(filler, data))
+    def read(filler: Filler, size: Size): Free[F, Response[ReadData]]           = inject[Store, F](Read(filler, size))
+    def write(filler: WritableFiller, data: WriteData): Free[F, Response[Unit]] = inject[Store, F](Write(filler, data))
 
     def lock(filler: Filler): Free[F, Response[Unit]]   = inject[Store, F](Lock(filler))
     def unlock(filler: Filler): Free[F, Response[Unit]] = inject[Store, F](UnLock(filler))
@@ -114,7 +115,7 @@ sealed trait Filler {
 }
 
 object Filler {
-  def apply(filePath: Path, size: Size, mode: FileMode, magic: Array[Byte]): Filler = {
+  def apply(filePath: Path, size: Size, mode: FileMode): Filler = {
     val raf = new RandomAccessFile(filePath.file.value.getPath, mode.mode)
     mode match {
       case ReadOnly ⇒
@@ -125,14 +126,9 @@ object Filler {
         }
       case ReadWrite ⇒
         new WritableFiller {
-          override def underlying: RandomAccessFile = {
-            raf.write(magic)
-            raf.writeLong(size.sizeInByte)
-            raf.writeLong(0)
-            raf
-          }
-          override def blockSize: Size = size
-          override def path: Path      = filePath
+          override def underlying: RandomAccessFile = raf
+          override def blockSize: Size              = size
+          override def path: Path                   = filePath
         }
     }
   }
@@ -140,6 +136,8 @@ object Filler {
 
 sealed trait WritableFiller extends Filler
 sealed trait ReadonlyFiller extends Filler
+
+sealed trait IndexFiller extends Filler
 
 /**
   * FileMode
@@ -195,13 +193,31 @@ object Size {
   * ----
   * Wrapper of data block
   */
-sealed trait Data {
+sealed trait Data
+
+sealed trait WriteData extends Data {
   def content: ByteBuffer
 }
 
-object Data {
-  def apply(buffer: ByteBuffer): Data = new Data {
+object WriteData {
+  def apply(buffer: ByteBuffer): WriteData = new WriteData() {
     override def content: ByteBuffer = buffer
+  }
+}
+
+sealed trait ReadData extends Data {
+  def hasRemaining: Boolean
+
+  def next: ByteBuffer
+}
+
+object ReadData {
+  def apply(f: () ⇒ ByteBuffer, numberRef: AtomicLong): ReadData = {
+    new ReadData {
+      override def next: ByteBuffer = f()
+
+      override def hasRemaining: Boolean = numberRef.get() > 0
+    }
   }
 }
 

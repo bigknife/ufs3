@@ -23,15 +23,19 @@ lazy val commonSettings = Seq(
 lazy val interpreter = (project in file("interpreter"))
   .settings(commonSettings: _*)
   .dependsOn(kernel)
+  .settings(
+    // https://mvnrepository.com/artifact/log4j/log4j
+    libraryDependencies += "log4j" % "log4j" % "1.2.17"
+  )
 
 lazy val kernel = (project in file("kernel"))
   .settings(commonSettings: _*)
   .settings(
     //add other settings
-    libraryDependencies += "org.typelevel" %% "cats" % "0.9.0",
+    libraryDependencies += "org.typelevel" %% "cats"        % "0.9.0",
     libraryDependencies += "org.typelevel" %% "cats-effect" % "0.3",
-    libraryDependencies += "org.scalactic" %% "scalactic" % "3.0.1",
-    libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.1" % "test"
+    libraryDependencies += "org.scalactic" %% "scalactic"   % "3.0.1",
+    libraryDependencies += "org.scalatest" %% "scalatest"   % "3.0.1" % "test"
   )
 
 lazy val core = (project in file("core"))

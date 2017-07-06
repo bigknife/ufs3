@@ -4,8 +4,10 @@ import java.io.{File, FileNotFoundException, RandomAccessFile}
 import java.nio.ByteBuffer
 import java.nio.channels.{FileChannel, FileLock}
 import java.util.concurrent.Semaphore
+import java.util.concurrent.atomic.AtomicLong
 
 import cats.{Id, ~>}
+import store.Response._
 import ufs3.kernel.store.FileMode.{ReadOnly, ReadWrite}
 import ufs3.kernel.store.Size._
 import ufs3.kernel.store.Store._
@@ -14,7 +16,7 @@ import ufs3.kernel.store._
 /**
   * Created by songwenchao on 2017/7/4.
   */
-object StoreInterpreter {
+object StoreInterpreter extends App {
 
   @volatile private var existedMap = Map.empty[String, Boolean]
   @volatile private var fillerMap  = Map.empty[String, Filler]
@@ -41,9 +43,9 @@ object StoreInterpreter {
       case Close(filler) ⇒
         safeResponse[Unit](close(filler))
       case Read(filler, size) ⇒
-        safeResponse[Data](read(filler, size.sizeInByte))
+        safeResponse[ReadData](read(filler, size.sizeInByte))
       case Write(filler, data) ⇒
-        safeResponse(write(filler, data.content))
+        safeResponse[Unit](write(filler, data.content))
       case Lock(filler) ⇒
         safeResponse[Unit](lock(filler))
       case UnLock(filler) ⇒
@@ -54,10 +56,14 @@ object StoreInterpreter {
         safeResponse[Boolean](isWriting(filler))
       case SeekTo(filler, position) ⇒
         safeResponse[Unit](seekTo(filler, position))
+      // TODO: wait to implement
+//      case Writable(filler) ⇒
+//       TODO: wait to implement
+//      case Readable(filler) ⇒
     }
   }
 
-  def existed(path: String): Boolean = {
+  private def existed(path: String): Boolean = {
     existedSemaphore.acquire()
     val existed = existedMap.get(path) match {
       case Some(result) ⇒ result
@@ -71,7 +77,7 @@ object StoreInterpreter {
     existed
   }
 
-  def isLegal(filler: Filler): Boolean = {
+  private def isLegal(filler: Filler): Boolean = {
     if (filler != null && filler.underlying != null) {
       val channel     = filler.underlying.getChannel
       val magicBuffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, 4)
@@ -86,14 +92,19 @@ object StoreInterpreter {
       throw new IllegalArgumentException("the file to judge whether legal can not be null")
   }
 
-  def create(filePath: String, size: Long): Filler = {
+  private def create(filePath: String, size: Long): Filler = {
     fillerSemaphore.acquire()
     val file = new File(filePath + ".bak")
     file.createNewFile()
     val finalFile = new File(filePath)
     if (!finalFile.exists()) {
       file.renameTo(finalFile)
-      val filler = Filler(Path(filePath), size.B, ReadWrite, MAGIC)
+      val filler = Filler(Path(filePath), size.B, ReadWrite)
+      val raf    = filler.underlying
+      raf.setLength(size + 20)
+      raf.write(MAGIC)
+      raf.writeLong(size)
+      raf.writeLong(0)
       existedMap += (filePath → true)
       fillerSemaphore.release()
       filler
@@ -104,7 +115,7 @@ object StoreInterpreter {
     }
   }
 
-  def delete(path: String): Unit = {
+  private def delete(path: String): Unit = {
     val file = new File(path)
     if (file.exists()) {
       file.delete()
@@ -112,14 +123,15 @@ object StoreInterpreter {
     } else ()
   }
 
-  def open(filePath: String, mode: FileMode): Filler = {
+  // TODO: control file handle
+  private def open(filePath: String, mode: FileMode): Filler = {
     def openFile(): Filler = {
       if (existed(filePath)) {
         val raf = new RandomAccessFile(filePath, mode.mode)
         val sizeBuffer =
           raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 4, 8)
         val size   = sizeBuffer.getLong()
-        val filler = Filler(Path(filePath), size.B, mode, Array.empty[Byte])
+        val filler = Filler(Path(filePath), size.B, mode)
         filler
       } else throw new FileNotFoundException(filePath)
     }
@@ -140,7 +152,7 @@ object StoreInterpreter {
     }
   }
 
-  def close(filler: Filler): Unit = {
+  private def close(filler: Filler): Unit = {
     if (filler != null && filler.underlying != null) {
       fillerSemaphore.acquire()
       val filePath = filler.path.file.value.getPath
@@ -156,16 +168,26 @@ object StoreInterpreter {
       throw new IllegalArgumentException("the file to close can not be null")
   }
 
-  def read(filler: Filler, size: Long): Data = {
+  private def read(filler: Filler, size: Long): ReadData = {
     if (filler != null && filler.underlying != null) {
-      val mappedBuffer =
-        filler.underlying.getChannel.map(FileChannel.MapMode.READ_ONLY, filler.underlying.getChannel.position(), size)
-      Data(mappedBuffer)
+      val bufferSize    = 8192L
+      val num           = (size + bufferSize - 1) / bufferSize
+      val numberRef     = new AtomicLong(num)
+      var startPosition = filler.underlying.getChannel.position()
+      def readData(): ByteBuffer = {
+        val tag         = numberRef.getAndDecrement()
+        val readSize    = if (tag > 1) bufferSize else size - (num - 1) * bufferSize
+        val newPosition = if (tag == num) startPosition else startPosition + bufferSize
+        startPosition = newPosition
+        filler.underlying.getChannel
+          .map(FileChannel.MapMode.READ_ONLY, newPosition, readSize)
+      }
+      ReadData(readData, numberRef)
     } else
       throw new IllegalArgumentException("the file to read data can not be null")
   }
 
-  def write(filler: Filler, buffer: ByteBuffer): Unit = {
+  private def write(filler: Filler, buffer: ByteBuffer): Unit = {
     if (filler != null && filler.underlying != null) {
       val channel      = filler.underlying.getChannel
       val tailBuffer   = channel.map(FileChannel.MapMode.READ_WRITE, 12, 8)
@@ -183,12 +205,12 @@ object StoreInterpreter {
         tailBuffer.putLong(newPosition)
         ()
       } else
-        throw new IllegalArgumentException(s"the fdata to write to $filler is too large")
+        throw new IllegalArgumentException(s"the data to write to $filler is too large")
     } else
       throw new IllegalArgumentException("the file to be written can not be null")
   }
 
-  def lock(filler: Filler): Unit = {
+  private def lock(filler: Filler): Unit = {
     if (filler != null && filler.underlying != null) {
       fillerSemaphore.acquire()
       val path = filler.path.file.value.getPath
@@ -210,7 +232,7 @@ object StoreInterpreter {
       throw new IllegalArgumentException(s"the file $filler to lock can not be null")
   }
 
-  def unlock(filler: Filler): Unit = {
+  private def unlock(filler: Filler): Unit = {
     if (filler != null && filler.underlying != null) {
       fillerSemaphore.acquire()
       val path = filler.path.file.value.getPath
@@ -225,7 +247,7 @@ object StoreInterpreter {
       throw new IllegalArgumentException(s"the file $filler to unlock can not be null")
   }
 
-  def freeSpace(filler: Filler): Size = {
+  private def freeSpace(filler: Filler): Size = {
     if (filler != null && filler.underlying != null) {
       val tailBuffer =
         filler.underlying.getChannel.map(FileChannel.MapMode.READ_ONLY, 12, 8)
@@ -235,7 +257,7 @@ object StoreInterpreter {
       throw new IllegalArgumentException(s"the file $filler to get free space can not be null")
   }
 
-  def isWriting(filler: Filler): Boolean = {
+  private def isWriting(filler: Filler): Boolean = {
     if (filler != null && filler.underlying != null) {
       fillerSemaphore.acquire()
       val path = filler.path.file.value.getPath
@@ -251,18 +273,11 @@ object StoreInterpreter {
       throw new IllegalArgumentException(s"the file $filler to judge write status can not be null")
   }
 
-  def seekTo(filler: Filler, position: Position): Unit = {
+  private def seekTo(filler: Filler, position: Position): Unit = {
     if (filler != null && filler.underlying != null) {
       filler.underlying.seek(20 + position.value)
     } else
       throw new IllegalArgumentException("the file to seek position can not be null")
   }
-
-  def safeResponse[A](a: ⇒ A): Either[Throwable, A] =
-    try {
-      Right(a)
-    } catch {
-      case t: Throwable ⇒ Left(t)
-    }
 
 }

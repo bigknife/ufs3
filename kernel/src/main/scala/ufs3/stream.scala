@@ -5,7 +5,6 @@
   * @author: bigknife@outlook.com
   * @create: 2017/07/03
   */
-
 package ufs3
 package kernel
 package stream
@@ -33,7 +32,7 @@ object Stream {
     implicit def ops[F[_]](implicit I: Inject[Stream, F]) = new Ops[F]
 
     //todo: add a transformer to Store.Data
-    implicit val storeDataTransformer = new DataTransformer[ufs3.kernel.store.Data](sd ⇒ ???)
+    implicit val storeDataTransformer = new DataTransformer[ufs3.kernel.store.WriteData](sd ⇒ ???)
 
     //todo: add a transformer to Backup.Data
     implicit val backupDataTransformer = new DataTransformer[ufs3.kernel.backup.Data](sd ⇒ ???)
@@ -43,13 +42,18 @@ object Stream {
 /**
   * stream data
   */
-sealed trait Data {self ⇒
+sealed trait Data { self ⇒
   import Data._
   def byteBuffer: ByteBuffer
   def to[A](implicit transformer: DataTransformer[A]): A = transformer.run(self)
 }
 
 object Data {
+
+  def apply(buffer: ByteBuffer): Data = new Data {
+    override def byteBuffer: ByteBuffer = buffer
+  }
+
   final case class DataTransformer[A](run: Data ⇒ A)
 
 }
