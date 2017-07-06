@@ -33,10 +33,10 @@ object Stream {
     implicit def ops[F[_]](implicit I: Inject[Stream, F]) = new Ops[F]
 
     //todo: add a transformer to Store.Data
-    implicit val storeDataTransformer = new DataTransformer[ufs3.kernel.store.Data](sd ⇒ ???)
+    //implicit val storeDataTransformer = new DataTransformer[ufs3.kernel.store.Data](sd ⇒ ???)
 
     //todo: add a transformer to Backup.Data
-    implicit val backupDataTransformer = new DataTransformer[ufs3.kernel.backup.Data](sd ⇒ ???)
+    //implicit val backupDataTransformer = new DataTransformer[ufs3.kernel.backup.Data](sd ⇒ ???)
   }
 }
 
