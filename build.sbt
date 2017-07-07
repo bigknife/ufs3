@@ -1,5 +1,4 @@
 import sbt.Keys._
-import coursier._
 
 //moodify your orgnization and version
 lazy val commonSettings = Seq(
@@ -25,7 +24,8 @@ lazy val interpreter = (project in file("interpreter"))
   .dependsOn(kernel)
   .settings(
     // https://mvnrepository.com/artifact/log4j/log4j
-    libraryDependencies += "log4j" % "log4j" % "1.2.17"
+    libraryDependencies += "log4j"             % "log4j"       % "1.2.17",
+    libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.5.3"
   )
 
 lazy val kernel = (project in file("kernel"))
