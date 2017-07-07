@@ -23,28 +23,26 @@ object Filler {
   final case class ValidateBlock(bf: BlockFile) extends Filler[Response[Unit]]
 
   final class Ops[F[_]](implicit I: Inject[Filler, F]) {
-    def openBlock(path: Path, mode: FileMode, size: Size)(implicit B: Block.Ops[F]): Free[F, Response[Unit]] = {
-      // f1:
-      val f1 = for {
+    def initBlock(bf: BlockFile): Free[F, Response[Unit]]     = inject[Filler, F](InitBlock(bf))
+    def validateBlock(bf: BlockFile): Free[F, Response[Unit]] = inject[Filler, F](ValidateBlock(bf))
+
+    def openBlock(path: Path, mode: FileMode, size: Size)(implicit B: Block.Ops[F]): Free[F, Response[Unit]] =
+      for {
         rof ← B.open(path, mode)
         a ← rof match {
           case Left(t)        ⇒ freeError[F, Unit](t)
-          case Right(Some(x)) ⇒
-            // 如果已经有文件了，直接进行验证
-            inject[Filler, F](InitBlock(x))
+          case Right(Some(x)) ⇒ validateBlock(bf = x) // 如果已经有文件了，直接进行验证
           case Right(None)    ⇒
             // 如果没有，则新建，然后进行初始化
             for {
               rof1 ← B.create(path, size)
               a1 ← rof1 match {
-                case Left(t) ⇒ freeError[F, Unit](t)
-                case Right(bf) ⇒ inject[Filler, F](ValidateBlock(bf))
+                case Left(t)   ⇒ freeError[F, Unit](t)
+                case Right(bf) ⇒ initBlock(bf)
               }
             } yield a1
         }
       } yield a
-      f1
-    }
   }
 
   object Ops {

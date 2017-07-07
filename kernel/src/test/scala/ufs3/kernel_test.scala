@@ -26,17 +26,17 @@ object Mock extends App{
   def blockInterpreter = new (Block ~> Id) {
     override def apply[A](fa: Block[A]): Id[A] = fa match {
       case Open(path, mode) ⇒
-        println(s"open path=${path.file.value}, use mode=$mode")
+        println(s"${Thread.currentThread()} open path=${path.file.value}, use mode=$mode")
         if(path.file.value.exists() && path.file.value.isFile) Right(Some(BlockFile(path, mode).value))
         else Right(None)
 
       case Create(path, size) ⇒
-        println(s"create path=${path.file.value}, use mode=$size")
+        println(s"${Thread.currentThread()} create path=${path.file.value}, use mode=$size")
         path.file.value.createNewFile()
         Right(BlockFile(path, FileMode.ReadWrite).value)
 
       case x ⇒
-        println(s"other adt: $x")
+        println(s"${Thread.currentThread()} other adt: $x")
         Left(new UnsupportedOperationException(s"$x")).asInstanceOf[A]
     }
   }
@@ -44,10 +44,10 @@ object Mock extends App{
   def fillerInterpreter = new (Filler ~> Id) {
     override def apply[A](fa: Filler[A]): Id[A] = fa match {
       case InitBlock(bf) ⇒
-        println("filler interpreter: init block")
+        println(s"${Thread.currentThread()} filler interpreter: init block")
         Right(())
       case ValidateBlock(bf) ⇒
-        println("filler interpreter: validate block")
+        println(s"${Thread.currentThread()} filler interpreter: validate block")
         Right(())
     }
   }
