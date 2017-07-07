@@ -39,7 +39,7 @@ object Store {
 
   case class Close(filler: Filler) extends Store[Response[Unit]]
 
-  case class Read(filler: Filler, size: Size) extends Store[Response[ReadData]]
+  case class Read(filler: Filler, size: Size, bufferSize: Long) extends Store[Response[ReadData]]
 
   case class Write(filler: WritableFiller, data: WriteData) extends Store[Response[Unit]]
 
@@ -73,7 +73,8 @@ object Store {
 
     def close(filler: Filler): Free[F, Response[Unit]] = inject[Store, F](Close(filler))
 
-    def read(filler: Filler, size: Size): Free[F, Response[ReadData]] = inject[Store, F](Read(filler, size))
+    def read(filler: Filler, size: Size, bufferSize: Long): Free[F, Response[ReadData]] =
+      inject[Store, F](Read(filler, size, bufferSize))
 
     def write(filler: WritableFiller, data: WriteData): Free[F, Response[Unit]] = inject[Store, F](Write(filler, data))
 

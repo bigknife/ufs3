@@ -3,7 +3,7 @@ package store
 import java.io.{File, FileNotFoundException, RandomAccessFile}
 import java.nio.ByteBuffer
 import java.nio.channels.{FileChannel, FileLock}
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, Semaphore}
 import java.util.concurrent.atomic.AtomicLong
 
 import cats.{Id, ~>}
@@ -27,6 +27,7 @@ object StoreInterpreter extends App {
 
   private lazy val poolSize          = 20
   @volatile private var fillerVector = Vector.empty[Filler]
+  private lazy val fileSemaphore     = new Semaphore(1)
 
   lazy val interpreter: Store ~> Id = new (Store ~> Id) {
 
@@ -43,8 +44,8 @@ object StoreInterpreter extends App {
         safeResponse[Filler](open(path.file.value.getPath, mode))
       case Close(filler) ⇒
         safeResponse[Unit](close(filler))
-      case Read(filler, size) ⇒
-        safeResponse[ReadData](read(filler, size.sizeInByte))
+      case Read(filler, size, bufferSize) ⇒
+        safeResponse[ReadData](read(filler, size.sizeInByte, bufferSize))
       case Write(filler, data) ⇒
         safeResponse[Unit](write(filler, data.content))
       case Lock(filler) ⇒
@@ -117,36 +118,40 @@ object StoreInterpreter extends App {
     } else ()
   }
 
-  private def getFillerInstance: Filler = {
-    val filler = fillerVector.head
-    fillerVector = filler +: fillerVector.tail
-    filler
+  private def getFillerInstance(path: String, mode: FileMode): Filler = {
+    fileSemaphore.acquire()
+    val fileFiller = if (fillerVector.isEmpty || fillerVector.size <= poolSize) {
+      val filler = openFile(path, mode)
+      fillerVector = fillerVector :+ filler
+      filler
+    } else {
+      val filler = fillerVector.head
+      fillerVector = fillerVector.tail :+ filler
+      filler
+    }
+    fileSemaphore.release()
+    fileFiller
+  }
+
+  private def openFile(filePath: String, mode: FileMode): Filler = {
+    if (existed(filePath)) {
+      val raf = new RandomAccessFile(filePath, mode.mode)
+      val sizeBuffer =
+        raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 4, 8)
+      val size   = sizeBuffer.getLong()
+      val filler = Filler(Path(filePath), size.B, mode)
+      filler
+    } else throw new FileNotFoundException(filePath)
   }
 
   private def open(filePath: String, mode: FileMode): Filler = {
-    def openFile(): Filler = {
-      if (existed(filePath)) {
-        val raf = new RandomAccessFile(filePath, mode.mode)
-        val sizeBuffer =
-          raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 4, 8)
-        val size   = sizeBuffer.getLong()
-        val filler = Filler(Path(filePath), size.B, mode)
-        filler
-      } else throw new FileNotFoundException(filePath)
-    }
-
     mode match {
-      case ReadOnly ⇒
-        if (fillerVector.isEmpty || fillerVector.size <= poolSize) {
-          val filler = openFile()
-          fillerVector = filler +: fillerVector
-          getFillerInstance
-        } else getFillerInstance
+      case ReadOnly ⇒ getFillerInstance(filePath, mode)
       case ReadWrite ⇒
         fillerMap.get(filePath) match {
           case filler: Filler ⇒ filler
           case null ⇒
-            val filler = openFile()
+            val filler = openFile(filePath, mode)
             fillerMap.putIfAbsent(filePath, filler)
             filler
         }
@@ -167,10 +172,8 @@ object StoreInterpreter extends App {
       throw new IllegalArgumentException("the file to close can not be null")
   }
 
-  private def read(filler: Filler, size: Long): ReadData = {
+  private def read(filler: Filler, size: Long, bufferSize: Long): ReadData = {
     if (filler != null && filler.underlying != null) {
-      val bufferSize = 8192L
-
       def readData(totalNumber: Long, numberRef: AtomicLong, currentPosition: Long, totalSize: Long): ByteBuffer = {
         val tag      = numberRef.getAndDecrement()
         val readSize = if (tag > 1) bufferSize else totalSize - (totalNumber - 1) * bufferSize

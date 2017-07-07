@@ -23,9 +23,10 @@ lazy val interpreter = (project in file("interpreter"))
   .settings(commonSettings: _*)
   .dependsOn(kernel)
   .settings(
-    // https://mvnrepository.com/artifact/log4j/log4j
-    libraryDependencies += "log4j"             % "log4j"       % "1.2.17",
-    libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.5.3"
+    libraryDependencies += "log4j"             % "log4j"           % "1.2.17",
+    libraryDependencies += "com.typesafe.akka" %% "akka-actor"     % "2.5.3",
+    libraryDependencies += "org.reactivemongo" %% "reactivemongo"  % "0.11.14",
+    libraryDependencies += "io.spray"          % "spray-json_2.11" % "1.3.3"
   )
 
 lazy val kernel = (project in file("kernel"))
