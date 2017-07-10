@@ -76,7 +76,7 @@ object FreeTTestApp extends App {
         case () ⇒
         Future {
           println(s"${Thread.currentThread()} $sth")
-          Thread.sleep(1000)
+          Thread.sleep(3000)
           1
         }
       }
@@ -104,7 +104,7 @@ object FreeTTestApp extends App {
     }
   }
 
-  val future = f(0).foldMap(intp4).run(())
+  val future = f(1).foldMap(intp4).run(())
   println(Await.result(future, Duration.Inf))
 
 }
