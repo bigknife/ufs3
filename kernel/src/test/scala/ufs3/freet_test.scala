@@ -64,7 +64,7 @@ object FreeTTestApp extends App {
     _ ← blala
   } yield a
 
-  f(0).hoist()
+
 
 
 
