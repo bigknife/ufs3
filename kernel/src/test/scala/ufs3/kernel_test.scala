@@ -45,10 +45,10 @@ object Mock extends App{
     override def apply[A](fa: Filler[A]): Id[A] = fa match {
       case InitBlock(bf) ⇒
         println(s"${Thread.currentThread()} filler interpreter: init block")
-        Right(())
+        Right(FillerFile())
       case ValidateBlock(bf) ⇒
         println(s"${Thread.currentThread()} filler interpreter: validate block")
-        Right(())
+        Right(FillerFile())
     }
   }
 
@@ -56,10 +56,10 @@ object Mock extends App{
   val interpreter = fillerInterpreter or blockInterpreter
 
 
-  def program(path: Path,mode: FileMode,size: Size)(implicit F: Filler.Ops[TestApp]): Free[TestApp, Response[Unit]] = {
+  def program(path: Path,mode: FileMode,size: Size)(implicit F: Filler.Ops[TestApp]): Free[TestApp, Response[FillerFile]] = {
     import F._
     for {
-      a ← openBlock(path, mode, size)
+      a ← openFillerFile(path, mode, size)
     } yield a
   }
   import Size._

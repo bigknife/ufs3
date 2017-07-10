@@ -19,25 +19,26 @@ import Free._
 
 sealed trait Filler[A]
 object Filler {
-  final case class InitBlock(bf: BlockFile)     extends Filler[Response[Unit]]
-  final case class ValidateBlock(bf: BlockFile) extends Filler[Response[Unit]]
+  final case class InitBlock(bf: BlockFile)     extends Filler[Response[FillerFile]]
+  final case class ValidateBlock(bf: BlockFile) extends Filler[Response[FillerFile]]
 
   final class Ops[F[_]](implicit I: Inject[Filler, F]) {
-    def initBlock(bf: BlockFile): Free[F, Response[Unit]]     = inject[Filler, F](InitBlock(bf))
-    def validateBlock(bf: BlockFile): Free[F, Response[Unit]] = inject[Filler, F](ValidateBlock(bf))
+    def initBlock(bf: BlockFile): Free[F, Response[FillerFile]]     = inject[Filler, F](InitBlock(bf))
+    def validateBlock(bf: BlockFile): Free[F, Response[FillerFile]] = inject[Filler, F](ValidateBlock(bf))
 
-    def openBlock(path: Path, mode: FileMode, size: Size)(implicit B: Block.Ops[F]): Free[F, Response[Unit]] =
+
+    def openFillerFile(path: Path, mode: FileMode, size: Size)(implicit B: Block.Ops[F]): Free[F, Response[FillerFile]] =
       for {
         rof ← B.open(path, mode)
         a ← rof match {
-          case Left(t)        ⇒ freeError[F, Unit](t)
+          case Left(t)        ⇒ freeError[F, FillerFile](t)
           case Right(Some(x)) ⇒ validateBlock(bf = x) // 如果已经有文件了，直接进行验证
           case Right(None)    ⇒
             // 如果没有，则新建，然后进行初始化
             for {
               rof1 ← B.create(path, size)
               a1 ← rof1 match {
-                case Left(t)   ⇒ freeError[F, Unit](t)
+                case Left(t)   ⇒ freeError[F, FillerFile](t)
                 case Right(bf) ⇒ initBlock(bf)
               }
             } yield a1
@@ -51,3 +52,6 @@ object Filler {
 }
 
 sealed trait FillerFile
+object FillerFile {
+  def apply(): FillerFile = new FillerFile(){}
+}
