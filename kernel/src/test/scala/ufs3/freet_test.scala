@@ -2,11 +2,14 @@ package ufs3
 package kernel
 package test
 
+import java.text.SimpleDateFormat
+
 import cats._
 import cats.implicits._
 import cats.free._
 import block._
-import cats.data.Kleisli
+import cats.data.{Const, Kleisli}
+import ufs3.kernel.test.FreeApplicativeTest.Validation
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -75,7 +78,7 @@ object FreeTTestApp extends App {
       case Think(sth) ⇒ Kleisli {
         case () ⇒
         Future {
-          println(s"${Thread.currentThread()} $sth")
+          println(s"think: current thread ${Thread.currentThread().getName}, current time: ${new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date)}")
           Thread.sleep(3000)
           1
         }
@@ -83,22 +86,25 @@ object FreeTTestApp extends App {
       case Doit(sth) ⇒ Kleisli {
         case () ⇒
         Future {
-          println(s"${Thread.currentThread()} do it")
-          Thread.sleep(1000)
+          println(s"doit: current thread ${Thread.currentThread().getName}, current time: ${new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date)}")
+
+          Thread.sleep(3000)
           throw new RuntimeException("do it allways throw exception")
         }
       }
       case Done(sth) ⇒ Kleisli {
         case () ⇒
         Future {
-          println(s"${Thread.currentThread()} done")
+          println(s"done: current thread ${Thread.currentThread().getName}, current time: ${new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date)}")
+          Thread.sleep(3000)
+
           true
         }
       }
       case Blala(sth) ⇒ Kleisli {
         case () ⇒
         Future {
-          println(s"${Thread.currentThread()} blala")
+          println(s"blala: current thread ${Thread.currentThread().getName}, current time: ${new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date)}")
         }
       }
     }
@@ -106,5 +112,6 @@ object FreeTTestApp extends App {
 
   val future = f(1).foldMap(intp4).run(())
   println(Await.result(future, Duration.Inf))
+
 
 }
