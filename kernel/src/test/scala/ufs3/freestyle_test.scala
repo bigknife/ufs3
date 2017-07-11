@@ -128,11 +128,11 @@ object FreeStyleTestApp extends App {
 //    override def apply[A](fa: Par[BigApp, A]): Id[A] =
 //  }
 
-  s.foldMap(logInterpreter or valInterperter)
+  //s.foldMap(logInterpreter or valInterperter)
 
 
 
-  println(s)
+  //println(s)
 
   //val f1: FreeApplicative[Validation.Op, Boolean] = ???
   //f1.flatMap()
