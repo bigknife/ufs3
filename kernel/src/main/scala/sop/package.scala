@@ -5,9 +5,9 @@
   * @author bigknife
   * @since 2017/7/12
   */
+
 import cats.free.{Free, FreeApplicative, Inject}
 import cats.{Applicative, ~>}
-
 import scala.language.higherKinds
 import scala.language.implicitConversions
 
@@ -21,8 +21,6 @@ package object sop {
 
   // natural transform
   type NT[F[_], G[_]] = (F ~> G)
-
-
 
   // lift F[A] to Par[F, A]
   def liftPar[F[_], A](fa: F[A]): Par[F, A] = FreeApplicative.lift(fa)
@@ -62,6 +60,4 @@ package object sop {
   implicit def liftInterpreter[F[_], G[_]: Applicative](nt: NT[F, G]): NT[Par[F, ?], G] = new NT[Par[F, ?], G] {
     override def apply[A](fa: Par[F, A]): G[A] = fa.foldMap(nt)
   }
-
-
 }
