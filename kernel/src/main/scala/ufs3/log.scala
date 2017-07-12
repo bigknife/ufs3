@@ -36,11 +36,7 @@ object Log {
   case class Error(msg: String, cause: Option[Throwable] = None) extends Op[Unit]
 
   // Ops to lift to Free Monad
-  import Free._
-
-  class Ops[F[_]](implicit I: Inject[Op, F]) extends Log[F] {
-    private[this] def inj[A](op: Op[A]): Free[F, A] = inject[Op, F](op)
-
+  class To[F[_]](implicit I: Inject[Op, F]) extends Log[F] {
     def debug(msg: String): Par[F, Unit] = liftPar_T[Op, F, Unit](Debug(msg))
     def info(msg: String): Par[F, Unit]  = liftPar_T[Op, F, Unit](Info(msg))
     def warn(msg: String): Par[F, Unit]  = liftPar_T[Op, F, Unit](Warn(msg))
@@ -51,8 +47,7 @@ object Log {
     def info(msg: String, cause: Throwable): Par[F, Unit]  = liftPar_T[Op, F, Unit](Info(msg, Some(cause)))
     def warn(msg: String, cause: Throwable): Par[F, Unit]  = liftPar_T[Op, F, Unit](Warn(msg, Some(cause)))
   }
-  implicit def toOps[F[_]](implicit I: Inject[Op, F]): Ops[F] = new Ops[F]
-
+  implicit def to[F[_]](implicit I: Inject[Op, F]): To[F] = new To[F]
   def apply[F[_]](implicit L: Log[F]): Log[F] = L
 
   trait Handler[M[_]] extends NT[Op, M] {

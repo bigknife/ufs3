@@ -2,8 +2,8 @@
   * backup.scala
   * ------------
   * the kernel adt of backup
-  * @author: bigknife@outlook.com
-  * @create: 2017/07/03
+  * @author : bigknife@outlook.com
+  * @since : 2017/07/03
   */
 package ufs3
 package kernel
@@ -14,30 +14,33 @@ import scala.language.implicitConversions
 
 import cats.free.{Free, Inject}
 import Free._
+import sop._
 
 /**
   * Backup
   * ------
   * UFS3 Backup adt
   */
-sealed trait Backup[A]
+sealed trait Backup[F[_]] {
+  def open(): Par[F, Unit]
+  def close(): Par[F, Unit]
+  def send(data: Data): Par[F, Unit]
+}
 object Backup {
-  type Response[A] = Either[Throwable, A]
+  sealed trait Op[A]
+  case object Open            extends Op[Unit]
+  case object Close           extends Op[Unit]
+  case class Send(data: Data) extends Op[Unit]
 
-  case object Open  extends Backup[Response[Unit]]
-  case object Close extends Backup[Response[Unit]]
-
-  case class Send(data: Data) extends Backup[Response[Unit]]
-
-  class Ops[F[_]](implicit I: Inject[Backup, F]) {
-    def open(): Free[F, Response[Unit]]  = inject[Backup, F](Open)
-    def close(): Free[F, Response[Unit]] = inject[Backup, F](Close)
-
-    def send(data: Data): Free[F, Response[Unit]] = inject[Backup, F](Send(data))
+  class To[F[_]](implicit I: Inject[Op, F]) extends Backup[F] {
+    override def open(): Par[F, Unit]           = liftPar_T[Op, F, Unit](Open)
+    override def close(): Par[F, Unit]          = liftPar_T[Op, F, Unit](Close)
+    override def send(data: Data): Par[F, Unit] = liftPar_T[Op, F, Unit](Send(data))
   }
-  object Ops {
-    implicit def ops[F[_]](implicit I: Inject[Backup, F]) = new Ops[F]
-  }
+
+  implicit def to[F[_]](implicit I: Inject[Op, F]) = new To[F]
+  def apply[F[_]](implicit B: Backup[F]): Backup[F]    = B
+
 }
 
 /**
