@@ -16,14 +16,14 @@ import cats.~>
 
 import scala.language.higherKinds
 import scala.language.implicitConversions
-
+import sop._
 /**
   * Audit Free Monad
   */
 sealed trait Audit[F[_]] {
-  def begin(auditInfo: BeginAudit): Free[F, Unit]
-  def process(auditInfo: ProcessAudit): Free[F, Unit]
-  def end(auditInfo: EndAudit): Free[F, Unit]
+  def begin(auditInfo: BeginAudit): Par[F, Unit]
+  def process(auditInfo: ProcessAudit): Par[F, Unit]
+  def end(auditInfo: EndAudit): Par[F, Unit]
 }
 object Audit {
   sealed trait Op[A]
@@ -32,9 +32,9 @@ object Audit {
   case class End(auditInfo: EndAudit) extends Op[Unit]
 
   class Ops[F[_]](implicit I: Inject[Op, F]) extends Audit[F] {
-    def begin(auditInfo: BeginAudit): Free[F, Unit] = inject[Op, F](Begin(auditInfo))
-    def process(auditInfo: ProcessAudit): Free[F, Unit] = inject[Op, F](Process(auditInfo))
-    def end(auditInfo: EndAudit): Free[F, Unit] = inject[Op, F](End(auditInfo))
+    def begin(auditInfo: BeginAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](Begin(auditInfo))
+    def process(auditInfo: ProcessAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](Process(auditInfo))
+    def end(auditInfo: EndAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](End(auditInfo))
   }
   implicit def ops[F[_]](implicit I: Inject[Op, F]) = new Ops[F]
 

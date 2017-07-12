@@ -9,24 +9,27 @@ package ufs3
 package kernel
 package log
 
+import sop._
 import scala.language.higherKinds
 import cats.free.{Free, Inject}
 import cats.~>
 
 // log free monad
 sealed trait Log[F[_]] {
-  def debug(msg: String): Free[F, Unit]
-  def debug(msg: String, cause: Throwable): Free[F, Unit]
-  def info(msg: String): Free[F, Unit]
-  def info(msg: String, cause: Throwable): Free[F, Unit]
-  def warn(msg: String): Free[F, Unit]
-  def warn(msg: String, cause: Throwable): Free[F, Unit]
-  def error(msg: String): Free[F, Unit]
-  def error(msg: String, cause: Throwable): Free[F, Unit]
+  def debug(msg: String): Par[F, Unit]
+  def info(msg: String): Par[F, Unit]
+  def warn(msg: String): Par[F, Unit]
+  def error(msg: String): Par[F, Unit]
+
+  def error(msg: String, cause: Throwable): Par[F, Unit]
+  def debug(msg: String, cause: Throwable): Par[F, Unit]
+  def info(msg: String, cause: Throwable): Par[F, Unit]
+  def warn(msg: String, cause: Throwable): Par[F, Unit]
 }
 
 object Log {
-  sealed trait Op[A]                                             extends Product with Serializable
+  sealed trait Op[A] extends Product with Serializable
+
   case class Debug(msg: String, cause: Option[Throwable] = None) extends Op[Unit]
   case class Info(msg: String, cause: Option[Throwable] = None)  extends Op[Unit]
   case class Warn(msg: String, cause: Option[Throwable] = None)  extends Op[Unit]
@@ -38,20 +41,21 @@ object Log {
   class Ops[F[_]](implicit I: Inject[Op, F]) extends Log[F] {
     private[this] def inj[A](op: Op[A]): Free[F, A] = inject[Op, F](op)
 
-    def debug(msg: String): Free[F, Unit]                   = inj(Debug(msg))
-    def debug(msg: String, cause: Throwable): Free[F, Unit] = inj(Debug(msg, Some(cause)))
-    def info(msg: String): Free[F, Unit]                    = inj(Info(msg))
-    def info(msg: String, cause: Throwable): Free[F, Unit]  = inj(Info(msg, Some(cause)))
-    def warn(msg: String): Free[F, Unit]                    = inj(Warn(msg))
-    def warn(msg: String, cause: Throwable): Free[F, Unit]  = inj(Warn(msg, Some(cause)))
-    def error(msg: String): Free[F, Unit]                   = inj(Error(msg))
-    def error(msg: String, cause: Throwable): Free[F, Unit] = inj(Error(msg, Some(cause)))
+    def debug(msg: String): Par[F, Unit] = liftPar_T[Op, F, Unit](Debug(msg))
+    def info(msg: String): Par[F, Unit]  = liftPar_T[Op, F, Unit](Info(msg))
+    def warn(msg: String): Par[F, Unit]  = liftPar_T[Op, F, Unit](Warn(msg))
+    def error(msg: String): Par[F, Unit] = liftPar_T[Op, F, Unit](Error(msg))
+
+    def error(msg: String, cause: Throwable): Par[F, Unit] = liftPar_T[Op, F, Unit](Error(msg, Some(cause)))
+    def debug(msg: String, cause: Throwable): Par[F, Unit] = liftPar_T[Op, F, Unit](Debug(msg, Some(cause)))
+    def info(msg: String, cause: Throwable): Par[F, Unit]  = liftPar_T[Op, F, Unit](Info(msg, Some(cause)))
+    def warn(msg: String, cause: Throwable): Par[F, Unit]  = liftPar_T[Op, F, Unit](Warn(msg, Some(cause)))
   }
   implicit def toOps[F[_]](implicit I: Inject[Op, F]): Ops[F] = new Ops[F]
 
   def apply[F[_]](implicit L: Log[F]): Log[F] = L
 
-  trait Handler[M[_]] extends (Op ~> M) {
+  trait Handler[M[_]] extends NT[Op, M] {
     protected[this] def debug(msg: String, cause: Option[Throwable]): M[Unit]
     protected[this] def info(msg: String, cause: Option[Throwable]): M[Unit]
     protected[this] def warn(msg: String, cause: Option[Throwable]): M[Unit]

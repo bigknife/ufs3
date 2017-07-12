@@ -6,7 +6,7 @@ import cats.Id
 import cats.data.Coproduct
 import cats.free.Free
 
-
+import sop._
 object LogTestApp extends App {
   import ufs3.kernel.log._
   import ufs3.kernel.audit._
@@ -15,19 +15,19 @@ object LogTestApp extends App {
   val logHandler = new Log.Handler[Id] {
     override protected[this] def debug(msg: String, cause: Option[Throwable]): Id[Unit] = {
       println(msg)
-      if(cause.isDefined) cause.get.printStackTrace()
+      if (cause.isDefined) cause.get.printStackTrace()
     }
     override protected[this] def info(msg: String, cause: Option[Throwable]): Id[Unit] = {
       println(msg)
-      if(cause.isDefined) cause.get.printStackTrace()
+      if (cause.isDefined) cause.get.printStackTrace()
     }
     override protected[this] def warn(msg: String, cause: Option[Throwable]): Id[Unit] = {
       println(msg)
-      if(cause.isDefined) cause.get.printStackTrace()
+      if (cause.isDefined) cause.get.printStackTrace()
     }
     override protected[this] def error(msg: String, cause: Option[Throwable]): Id[Unit] = {
       println(msg)
-      if(cause.isDefined) cause.get.printStackTrace()
+      if (cause.isDefined) cause.get.printStackTrace()
     }
   }
   val auditHandler = new Audit.Handler[Id] {
@@ -42,12 +42,12 @@ object LogTestApp extends App {
   println("--------------------------")
 
   type AuditLogApp[A] = Coproduct[Audit.Op, Log.Op, A]
-  def program(implicit A: Audit[AuditLogApp], L: Log[AuditLogApp]): Free[AuditLogApp, Unit] =  {
+  def program(implicit A: Audit[AuditLogApp], L: Log[AuditLogApp]): SOP[AuditLogApp, Unit] = {
     import A._, L._, AuditInfo._
     import java.util.Date
     for {
       _ ← debug("Hello, this is the freestyle-like program")
-      _ ← begin(happening(new Date(),"testApp", "will info something"))
+      _ ← begin(happening(new Date(), "testApp", "will info something"))
       _ ← info("step1 ....")
       _ ← process(processing(new Date(), "testApp", "process step1"))
       _ ← end(happyEnding(new Date, "testApp", "ended"))
