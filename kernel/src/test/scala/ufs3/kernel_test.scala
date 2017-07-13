@@ -11,19 +11,18 @@ package test
 
 import block._
 import filler._
-import Block.Ops._
-import Block._
+
 import cats._
 import cats.data.Coproduct
 import cats.free._
 import ufs3.kernel.block.Block.{Create, Open}
 import ufs3.kernel.filler.Filler
-import ufs3.kernel.filler.Filler.{InitBlock, ValidateBlock}
 
+import sop._
 
 object Mock extends App{
   // block interpreter
-  def blockInterpreter = new (Block ~> Id) {
+  def blockInterpreter = new NT[Block, Id] {
     override def apply[A](fa: Block[A]): Id[A] = fa match {
       case Open(path, mode) ⇒
         println(s"${Thread.currentThread()} open path=${path.file.value}, use mode=$mode")

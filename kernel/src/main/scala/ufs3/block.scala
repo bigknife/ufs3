@@ -16,48 +16,76 @@ import scala.language.implicitConversions
 import cats.free.{Free, Inject}
 import cats.Eval
 import Free._
+import sop._
 
 /**
   * Block to lift to Free monad
   */
-sealed trait Block[A]
-object Block {
-  type Response[A] = Either[Throwable, A]
+trait Block[F[_]] {
+  def open(path: Path, mode: FileMode): Par[F, BlockFile]
+  def close(bf: BlockFile): Par[F, Unit]
+  def create(path: Path, size: Size): Par[F, BlockFile]
+  def delete(path: Path): Par[F, Unit]
+  def seek(bf: BlockFile, pos: Long): Par[F, Unit]
+  def read(bf: BlockFile, size: Size): Par[F, ByteBuffer]
+  def write(bf: BlockFile, data: ByteBuffer): Par[F, Unit]
+  def lock(bf: BlockFile): Par[F, Boolean]
+  def unlock(bf: BlockFile): Par[F, Unit]
 
-  //some util methods for response
-  private[kernel] def freeError[F[_], A](t: Throwable): Free[F, Response[A]] =
-    Free.pure[F, Response[A]](Left(t))
-  private[kernel] def freeResponse[F[_], A](a: A): Free[F, Response[A]] =
-    Free.pure[F, Response[A]](Right(a))
+}
+object Block {
+  sealed trait Op[A]
 
   // Block Command
-  final case class Open(path: Path, mode: FileMode)       extends Block[Response[Option[BlockFile]]]
-  final case class Close(bf: BlockFile)                   extends Block[Response[Unit]]
-  final case class Create(path: Path, size: Size)         extends Block[Response[BlockFile]]
-  final case class Delete(path: Path)                     extends Block[Response[Unit]]
-  final case class Seek(bf: BlockFile, pos: Long)         extends Block[Response[Unit]]
-  final case class Read(bf: BlockFile, size: Size)        extends Block[Response[ByteBuffer]]
-  final case class Write(bf: BlockFile, data: ByteBuffer) extends Block[Response[Unit]]
-  final case class Lock(bf: BlockFile)                    extends Block[Response[Boolean]]
-  final case class Unlock(bf: BlockFile)                  extends Block[Response[Unit]]
+  final case class Open(path: Path, mode: FileMode)       extends Op[BlockFile]
+  final case class Close(bf: BlockFile)                   extends Op[Unit]
+  final case class Create(path: Path, size: Size)         extends Op[BlockFile]
+  final case class Delete(path: Path)                     extends Op[Unit]
+  final case class Seek(bf: BlockFile, pos: Long)         extends Op[Unit]
+  final case class Read(bf: BlockFile, size: Size)        extends Op[ByteBuffer]
+  final case class Write(bf: BlockFile, data: ByteBuffer) extends Op[Unit]
+  final case class Lock(bf: BlockFile)                    extends Op[Boolean]
+  final case class Unlock(bf: BlockFile)                  extends Op[Unit]
 
-  final class Ops[F[_]](implicit I: Inject[Block, F]) {
-    // abrr of inject
-    private[this] def ij[A](b: Block[Response[A]]): Free[F, Response[A]] = inject[Block, F](b)
+  final class To[F[_]](implicit I: Inject[Op, F]) extends Block[F] {
 
-    def open(path: Path, mode: FileMode): Free[F, Response[Option[BlockFile]]]  = ij[Option[BlockFile]](Open(path, mode))
-    def close(bf: BlockFile): Free[F, Response[Unit]]                   = ij[Unit](Close(bf))
-    def create(path: Path, size: Size): Free[F, Response[BlockFile]]    = ij[BlockFile](Create(path, size))
-    def delete(path: Path): Free[F, Response[Unit]]                     = ij[Unit](Delete(path))
-    def seek(bf: BlockFile, pos: Long): Free[F, Response[Unit]]         = ij[Unit](Seek(bf, pos))
-    def read(bf: BlockFile, size: Size): Free[F, Response[ByteBuffer]]  = ij[ByteBuffer](Read(bf, size))
-    def write(bf: BlockFile, data: ByteBuffer): Free[F, Response[Unit]] = ij[Unit](Write(bf, data))
-    def lock(bf: BlockFile): Free[F, Response[Boolean]]                 = ij[Boolean](Lock(bf))
-    def unlock(bf: BlockFile): Free[F, Response[Unit]]             = ij[Unit](Unlock(bf))
+    def open(path: Path, mode: FileMode): Par[F, BlockFile]  = liftPar_T[Op, F, BlockFile](Open(path, mode))
+    def close(bf: BlockFile): Par[F, Unit]                   = liftPar_T[Op, F, Unit](Close(bf))
+    def create(path: Path, size: Size): Par[F, BlockFile]    = liftPar_T[Op, F, BlockFile](Create(path, size))
+    def delete(path: Path): Par[F, Unit]                     = liftPar_T[Op, F, Unit](Delete(path))
+    def seek(bf: BlockFile, pos: Long): Par[F, Unit]         = liftPar_T[Op, F, Unit](Seek(bf, pos))
+    def read(bf: BlockFile, size: Size): Par[F, ByteBuffer]  = liftPar_T[Op, F, ByteBuffer](Read(bf, size))
+    def write(bf: BlockFile, data: ByteBuffer): Par[F, Unit] = liftPar_T[Op, F, Unit](Write(bf, data))
+    def lock(bf: BlockFile): Par[F, Boolean]                 = liftPar_T[Op, F, Boolean](Lock(bf))
+    def unlock(bf: BlockFile): Par[F, Unit]                  = liftPar_T[Op, F, Unit](Unlock(bf))
   }
 
-  object Ops {
-    implicit def ops[F[_]](implicit I: Inject[Block, F]) = new Ops[F]
+  implicit def to[F[_]](implicit I: Inject[Op, F]) = new To[F]
+
+  def apply[F[_]](implicit B: Block[F]) = B
+
+  trait Handler[M[_]] extends NT[Op, M] {
+    protected[this] def open(path: Path, mode: FileMode): M[BlockFile]
+    protected[this] def close(bf: BlockFile): M[Unit]
+    protected[this] def create(path: Path, size: Size): M[BlockFile]
+    protected[this] def delete(path: Path): M[Unit]
+    protected[this] def seek(blockFile: BlockFile, pos: Long): M[Unit]
+    protected[this] def read(blockFile: BlockFile, size: Size): M[ByteBuffer]
+    protected[this] def write(blockFile: BlockFile, data: ByteBuffer): M[Unit]
+    protected[this] def lock(blockFile: BlockFile): M[Boolean]
+    protected[this] def unlock(blockFile: BlockFile): M[Unit]
+
+    override def apply[A](fa: Op[A]): M[A] = fa match {
+      case Open(path, mode)   ⇒ open(path, mode)
+      case Close(bf)          ⇒ close(bf)
+      case Create(path, size) ⇒ create(path, size)
+      case Delete(path)       ⇒ delete(path)
+      case Seek(bf, pos)      ⇒ seek(bf, pos)
+      case Read(bf, size)     ⇒ read(bf, size)
+      case Write(bf, data)    ⇒ write(bf, data)
+      case Lock(bf)           ⇒ lock(bf)
+      case Unlock(bf)         ⇒ unlock(bf)
+    }
   }
 
 }

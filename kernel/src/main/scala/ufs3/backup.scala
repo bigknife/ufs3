@@ -41,6 +41,17 @@ object Backup {
   implicit def to[F[_]](implicit I: Inject[Op, F]) = new To[F]
   def apply[F[_]](implicit B: Backup[F]): Backup[F]    = B
 
+  trait Handler[M[_]] extends NT[Op, M] {
+    protected[this] def open(): M[Unit]
+    protected[this] def close(): M[Unit]
+    protected[this] def send(data: Data): M[Unit]
+
+    override def apply[A](fa: Op[A]): M[A] = fa match {
+      case Open ⇒ open()
+      case Close ⇒ close()
+      case Send(data) ⇒ send(data)
+    }
+  }
 }
 
 /**

@@ -11,9 +11,6 @@ package kernel
 package audit
 
 import cats.free.{Free, Inject}
-import Free.inject
-import cats.~>
-
 import scala.language.higherKinds
 import scala.language.implicitConversions
 import sop._

@@ -13,45 +13,50 @@ package filler
 import scala.language.higherKinds
 import scala.language.implicitConversions
 import block._
-import Block._
-import cats.free.{Free, Inject}
-import Free._
+import cats.free.Inject
+import sop._
 
-sealed trait Filler[A]
+trait Filler[F[_]] {
+  def init(bf: BlockFile): Par[F, FillerFile]
+  def validate(bf: BlockFile): Par[F, FillerFile]
+  def checkIndex(ff: FillerFile): Par[F, Boolean]
+  def repairIndex(ff: FillerFile): Par[F, Unit]
+}
 object Filler {
-  final case class InitBlock(bf: BlockFile)     extends Filler[Response[FillerFile]]
-  final case class ValidateBlock(bf: BlockFile) extends Filler[Response[FillerFile]]
+  sealed trait Op[A]
+  final case class Init(bf: BlockFile)         extends Op[FillerFile]
+  final case class Validate(bf: BlockFile)     extends Op[FillerFile]
+  final case class CheckIndex(ff: FillerFile)  extends Op[Boolean]
+  final case class RepairIndex(ff: FillerFile) extends Op[Unit]
 
-  final class Ops[F[_]](implicit I: Inject[Filler, F]) {
-    def initBlock(bf: BlockFile): Free[F, Response[FillerFile]]     = inject[Filler, F](InitBlock(bf))
-    def validateBlock(bf: BlockFile): Free[F, Response[FillerFile]] = inject[Filler, F](ValidateBlock(bf))
-
-
-    def openFillerFile(path: Path, mode: FileMode, size: Size)(implicit B: Block.Ops[F]): Free[F, Response[FillerFile]] =
-      for {
-        rof ← B.open(path, mode)
-        a ← rof match {
-          case Left(t)        ⇒ freeError[F, FillerFile](t)
-          case Right(Some(x)) ⇒ validateBlock(bf = x) // 如果已经有文件了，直接进行验证
-          case Right(None)    ⇒
-            // 如果没有，则新建，然后进行初始化
-            for {
-              rof1 ← B.create(path, size)
-              a1 ← rof1 match {
-                case Left(t)   ⇒ freeError[F, FillerFile](t)
-                case Right(bf) ⇒ initBlock(bf)
-              }
-            } yield a1
-        }
-      } yield a
+  class To[F[_]](implicit I: Inject[Op, F]) extends Filler[F] {
+    def init(bf: BlockFile): Par[F, FillerFile]     = liftPar_T[Op, F, FillerFile](Init(bf))
+    def validate(bf: BlockFile): Par[F, FillerFile] = liftPar_T[Op, F, FillerFile](Validate(bf))
+    def checkIndex(ff: FillerFile): Par[F, Boolean] = liftPar_T[Op, F, Boolean](CheckIndex(ff))
+    def repairIndex(ff: FillerFile): Par[F, Unit]   = liftPar_T[Op, F, Unit](RepairIndex(ff))
   }
 
-  object Ops {
-    implicit def ops[F[_]](implicit I: Inject[Filler, F]) = new Ops[F]
+  implicit def to[F[_]](implicit I: Inject[Op, F]): Filler[F] = new To[F]
+
+  def apply[F[_]](implicit F: Filler[F]): Filler[F] = F
+
+  trait Handler[M[_]] extends NT[Op, M] {
+    def init(blockFile: BlockFile): M[FillerFile]
+    def validate(blockFile: BlockFile): M[FillerFile]
+    def checkIndex(ff: FillerFile): M[Boolean]
+    def repairIndex(ff: FillerFile): M[Unit]
+
+    override def apply[A](fa: Op[A]): M[A] = fa match {
+      case Init(bf)        => init(bf)
+      case Validate(bf)    ⇒ validate(bf)
+      case CheckIndex(ff)  ⇒ checkIndex(ff)
+      case RepairIndex(ff) ⇒ repairIndex(ff)
+    }
   }
+
 }
 
 sealed trait FillerFile
 object FillerFile {
-  def apply(): FillerFile = new FillerFile(){}
+  def apply(): FillerFile = new FillerFile() {}
 }
