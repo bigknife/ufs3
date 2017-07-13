@@ -31,16 +31,15 @@ object Audit {
   case class Process(auditInfo: ProcessAudit) extends Op[Unit]
   case class End(auditInfo: EndAudit) extends Op[Unit]
 
-  class Ops[F[_]](implicit I: Inject[Op, F]) extends Audit[F] {
+  class To[F[_]](implicit I: Inject[Op, F]) extends Audit[F] {
     def begin(auditInfo: BeginAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](Begin(auditInfo))
     def process(auditInfo: ProcessAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](Process(auditInfo))
     def end(auditInfo: EndAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](End(auditInfo))
   }
-  implicit def ops[F[_]](implicit I: Inject[Op, F]) = new Ops[F]
-
+  implicit def to[F[_]](implicit I: Inject[Op, F]) = new To[F]
   def apply[F[_]](implicit A: Audit[F]): Audit[F] = A
 
-  trait Handler[M[_]] extends (Op ~> M) {
+  trait Handler[M[_]] extends NT[Op, M] {
     protected[this] def begin(auditInfo: BeginAudit): M[Unit]
     protected[this] def process(auditInfo: ProcessAudit): M[Unit]
     protected[this] def end(auditInfo: EndAudit): M[Unit]
