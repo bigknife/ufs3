@@ -22,6 +22,7 @@ import sop._
 
 object Mock extends App{
   // block interpreter
+  /*
   def blockInterpreter = new NT[Block, Id] {
     override def apply[A](fa: Block[A]): Id[A] = fa match {
       case Open(path, mode) ⇒
@@ -39,7 +40,8 @@ object Mock extends App{
         Left(new UnsupportedOperationException(s"$x")).asInstanceOf[A]
     }
   }
-
+  */
+/*
   def fillerInterpreter = new (Filler ~> Id) {
     override def apply[A](fa: Filler[A]): Id[A] = fa match {
       case InitBlock(bf) ⇒
@@ -63,4 +65,5 @@ object Mock extends App{
   }
   import Size._
   program(Path("/tmp/test_aaa.txt"), FileMode.ReadWrite, 100.MiB).foldMap(interpreter)
+ */
 }
