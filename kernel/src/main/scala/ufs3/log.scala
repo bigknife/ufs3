@@ -11,8 +11,7 @@ package log
 
 import sop._
 import scala.language.higherKinds
-import cats.free.{Free, Inject}
-import cats.~>
+import cats.free.Inject
 
 // log free monad
 sealed trait Log[F[_]] {

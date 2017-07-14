@@ -10,7 +10,8 @@ package ufs3
 package kernel
 package audit
 
-import cats.free.{Free, Inject}
+import java.util.Date
+import cats.free.Inject
 import scala.language.higherKinds
 import scala.language.implicitConversions
 import sop._
@@ -18,6 +19,8 @@ import sop._
   * Audit Free Monad
   */
 sealed trait Audit[F[_]] {
+  import Audit._
+
   def begin(auditInfo: BeginAudit): Par[F, Unit]
   def process(auditInfo: ProcessAudit): Par[F, Unit]
   def end(auditInfo: EndAudit): Par[F, Unit]
@@ -47,31 +50,32 @@ object Audit {
       case End(auditInfo) ⇒ end(auditInfo)
     }
   }
+
+  /**
+    * AuditInfo
+    * ---------
+    * Audit Info
+    */
+  sealed trait AuditInfo {
+    def time: Date
+    def app: String
+    def msg: String
+  }
+  sealed trait BeginAudit extends AuditInfo
+  sealed trait EndAudit extends AuditInfo
+  sealed trait ProcessAudit extends AuditInfo
+
+  object AuditInfo {
+    case class Happening(time: Date, app: String, msg: String) extends BeginAudit
+    case class HappyEnding(time: Date, app: String, msg: String) extends EndAudit
+    case class SadEnding(time: Date, app: String, msg: String) extends EndAudit
+    case class Processing(time: Date, app: String, msg: String) extends ProcessAudit
+
+    def happening(time: Date, app: String, msg: String): BeginAudit = Happening(time, app, msg)
+    def happyEnding(time: Date, app: String, msg: String): EndAudit = HappyEnding(time, app, msg)
+    def sadEnding(time: Date, app: String, msg: String): EndAudit = SadEnding(time, app, msg)
+    def processing(time: Date, app: String, msg: String): ProcessAudit = Processing(time, app, msg)
+  }
+
 }
 
-/**
-  * AuditInfo
-  * ---------
-  * Audit Info
-  */
-import java.util.Date
-sealed trait AuditInfo {
-  def time: Date
-  def app: String
-  def msg: String
-}
-sealed trait BeginAudit extends AuditInfo
-sealed trait EndAudit extends AuditInfo
-sealed trait ProcessAudit extends AuditInfo
-
-object AuditInfo {
-  case class Happening(time: Date, app: String, msg: String) extends BeginAudit
-  case class HappyEnding(time: Date, app: String, msg: String) extends EndAudit
-  case class SadEnding(time: Date, app: String, msg: String) extends EndAudit
-  case class Processing(time: Date, app: String, msg: String) extends ProcessAudit
-
-  def happening(time: Date, app: String, msg: String): BeginAudit = Happening(time, app, msg)
-  def happyEnding(time: Date, app: String, msg: String): EndAudit = HappyEnding(time, app, msg)
-  def sadEnding(time: Date, app: String, msg: String): EndAudit = SadEnding(time, app, msg)
-  def processing(time: Date, app: String, msg: String): ProcessAudit = Processing(time, app, msg)
-}

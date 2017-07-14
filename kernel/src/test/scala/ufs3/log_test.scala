@@ -4,7 +4,7 @@ package test
 
 import cats.Id
 import cats.data.Coproduct
-import cats.free.Free
+import audit.Audit._
 
 import sop._
 object LogTestApp extends App {

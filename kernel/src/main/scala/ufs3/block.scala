@@ -13,15 +13,16 @@ import java.nio.ByteBuffer
 
 import scala.language.higherKinds
 import scala.language.implicitConversions
-import cats.free.{Free, Inject}
+import cats.free.Inject
 import cats.Eval
-import Free._
 import sop._
 
 /**
   * Block to lift to Free monad
   */
 trait Block[F[_]] {
+  import Block._
+
   def open(path: Path, mode: FileMode): Par[F, BlockFile]
   def close(bf: BlockFile): Par[F, Unit]
   def create(path: Path, size: Size): Par[F, BlockFile]
@@ -88,87 +89,88 @@ object Block {
     }
   }
 
-}
+  /**
+    * BlockFile
+    * ---------
+    * XFS-friendly big size file
+    */
+  sealed trait BlockFile {}
+  object BlockFile {
+    import java.io.RandomAccessFile
+    private[this] final class RandomAccessBlockFile(private val underlying: RandomAccessFile) extends BlockFile {}
 
-/**
-  * BlockFile
-  * ---------
-  * XFS-friendly big size file
-  */
-sealed trait BlockFile {}
-object BlockFile {
-  import java.io.RandomAccessFile
-  private[this] final class RandomAccessBlockFile(private val underlying: RandomAccessFile) extends BlockFile {}
-
-  def apply(path: Path, mode: FileMode): Eval[BlockFile] = {
-    for {
-      f ← path.file
-    } yield {
-      new RandomAccessBlockFile(underlying = new RandomAccessFile(f, mode.mode))
-    }
-  }
-}
-
-/**
-  * Path
-  * ----
-  * The file wrapper, we can get a file from a Path.
-  */
-import java.io.File
-sealed trait Path {
-  def file: Eval[File]
-}
-object Path {
-  def apply(p: String): Path = new Path {
-    def file: Eval[File] = Eval.later(new File(p))
-  }
-}
-
-/**
-  * FileMode
-  * --------
-  * The mode used to Read/Write a file.
-  * - ReadOnly: the file opened readonly
-  * - ReadWrite: the file opened readable and writable
-  */
-sealed trait FileMode {
-  def mode: String
-  override def toString: String = mode
-}
-object FileMode {
-  case object ReadOnly extends FileMode {
-    val mode: String = "r"
-  }
-  case object ReadWrite extends FileMode {
-    val mode: String = "rw"
-  }
-}
-
-/**
-  * Size
-  * ----
-  * Wrapper of Long, to identity the file length in bytes
-  */
-sealed trait Size {
-  def sizeInByte: Long
-}
-
-object Size {
-  sealed trait ToLong[A] {
-    def toLong(a: A): Long
-  }
-  final class SizeOp[A](a: A)(implicit ev: ToLong[A]) {
-    def B: Size = new Size {
-      override def sizeInByte: Long = ev.toLong(a)
-    }
-    def MiB: Size = new Size {
-      override def sizeInByte: Long = ev.toLong(a) * 1024
+    def apply(path: Path, mode: FileMode): Eval[BlockFile] = {
+      for {
+        f ← path.file
+      } yield {
+        new RandomAccessBlockFile(underlying = new RandomAccessFile(f, mode.mode))
+      }
     }
   }
 
-  implicit def AnyToLong[A] = new ToLong[A] {
-    override def toLong(a: A): Long = a.toString.toLong
+  /**
+    * Path
+    * ----
+    * The file wrapper, we can get a file from a Path.
+    */
+  import java.io.File
+  sealed trait Path {
+    def file: Eval[File]
+  }
+  object Path {
+    def apply(p: String): Path = new Path {
+      def file: Eval[File] = Eval.later(new File(p))
+    }
   }
 
-  implicit def toSizeOp[A](a: A)(implicit ev: ToLong[A]) = new SizeOp[A](a)
+  /**
+    * FileMode
+    * --------
+    * The mode used to Read/Write a file.
+    * - ReadOnly: the file opened readonly
+    * - ReadWrite: the file opened readable and writable
+    */
+  sealed trait FileMode {
+    def mode: String
+    override def toString: String = mode
+  }
+  object FileMode {
+    case object ReadOnly extends FileMode {
+      val mode: String = "r"
+    }
+    case object ReadWrite extends FileMode {
+      val mode: String = "rw"
+    }
+  }
+
+  /**
+    * Size
+    * ----
+    * Wrapper of Long, to identity the file length in bytes
+    */
+  sealed trait Size {
+    def sizeInByte: Long
+  }
+
+  object Size {
+    sealed trait ToLong[A] {
+      def toLong(a: A): Long
+    }
+    final class SizeOp[A](a: A)(implicit ev: ToLong[A]) {
+      def B: Size = new Size {
+        override def sizeInByte: Long = ev.toLong(a)
+      }
+      def MiB: Size = new Size {
+        override def sizeInByte: Long = ev.toLong(a) * 1024
+      }
+    }
+
+    implicit def AnyToLong[A] = new ToLong[A] {
+      override def toLong(a: A): Long = a.toString.toLong
+    }
+
+    implicit def toSizeOp[A](a: A)(implicit ev: ToLong[A]) = new SizeOp[A](a)
+  }
+
 }
+

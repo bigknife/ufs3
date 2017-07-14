@@ -12,8 +12,7 @@ package backup
 import scala.language.higherKinds
 import scala.language.implicitConversions
 
-import cats.free.{Free, Inject}
-import Free._
+import cats.free.Inject
 import sop._
 
 /**
@@ -22,6 +21,8 @@ import sop._
   * UFS3 Backup adt
   */
 sealed trait Backup[F[_]] {
+  import Backup.Data
+
   def open(): Par[F, Unit]
   def close(): Par[F, Unit]
   def send(data: Data): Par[F, Unit]
@@ -52,11 +53,13 @@ object Backup {
       case Send(data) ⇒ send(data)
     }
   }
+
+  /**
+    * Data
+    * ----
+    * Backup Data
+    */
+  sealed trait Data
+
 }
 
-/**
-  * Data
-  * ----
-  * Backup Data
-  */
-sealed trait Data

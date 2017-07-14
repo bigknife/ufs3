@@ -12,28 +12,24 @@ package filler
 
 import scala.language.higherKinds
 import scala.language.implicitConversions
-import block._
+import block.Block._
 import cats.free.Inject
 import sop._
 
 trait Filler[F[_]] {
+  import Filler.FillerFile
+
   def init(bf: BlockFile): Par[F, FillerFile]
-  def validate(bf: BlockFile): Par[F, FillerFile]
-  def checkIndex(ff: FillerFile): Par[F, Boolean]
-  def repairIndex(ff: FillerFile): Par[F, Unit]
+  def check(bf: BlockFile): Par[F, FillerFile]
 }
 object Filler {
   sealed trait Op[A]
-  final case class Init(bf: BlockFile)         extends Op[FillerFile]
-  final case class Validate(bf: BlockFile)     extends Op[FillerFile]
-  final case class CheckIndex(ff: FillerFile)  extends Op[Boolean]
-  final case class RepairIndex(ff: FillerFile) extends Op[Unit]
+  final case class Init(bf: BlockFile)  extends Op[FillerFile]
+  final case class Check(bf: BlockFile) extends Op[FillerFile]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Filler[F] {
-    def init(bf: BlockFile): Par[F, FillerFile]     = liftPar_T[Op, F, FillerFile](Init(bf))
-    def validate(bf: BlockFile): Par[F, FillerFile] = liftPar_T[Op, F, FillerFile](Validate(bf))
-    def checkIndex(ff: FillerFile): Par[F, Boolean] = liftPar_T[Op, F, Boolean](CheckIndex(ff))
-    def repairIndex(ff: FillerFile): Par[F, Unit]   = liftPar_T[Op, F, Unit](RepairIndex(ff))
+    def init(bf: BlockFile): Par[F, FillerFile]  = liftPar_T[Op, F, FillerFile](Init(bf))
+    def check(bf: BlockFile): Par[F, FillerFile] = liftPar_T[Op, F, FillerFile](Check(bf))
   }
 
   implicit def to[F[_]](implicit I: Inject[Op, F]): Filler[F] = new To[F]
@@ -42,21 +38,17 @@ object Filler {
 
   trait Handler[M[_]] extends NT[Op, M] {
     def init(blockFile: BlockFile): M[FillerFile]
-    def validate(blockFile: BlockFile): M[FillerFile]
-    def checkIndex(ff: FillerFile): M[Boolean]
-    def repairIndex(ff: FillerFile): M[Unit]
+    def check(blockFile: BlockFile): M[FillerFile]
 
     override def apply[A](fa: Op[A]): M[A] = fa match {
-      case Init(bf)        => init(bf)
-      case Validate(bf)    ⇒ validate(bf)
-      case CheckIndex(ff)  ⇒ checkIndex(ff)
-      case RepairIndex(ff) ⇒ repairIndex(ff)
+      case Init(bf)  => init(bf)
+      case Check(bf) ⇒ check(bf)
     }
   }
 
+  sealed trait FillerFile
+  object FillerFile {
+    def apply(): FillerFile = new FillerFile() {}
+  }
 }
 
-sealed trait FillerFile
-object FillerFile {
-  def apply(): FillerFile = new FillerFile() {}
-}

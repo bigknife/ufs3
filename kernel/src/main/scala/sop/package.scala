@@ -6,8 +6,10 @@
   * @since 2017/7/12
   */
 
+
 import cats.free.{Free, FreeApplicative, Inject}
 import cats.{Applicative, ~>}
+
 import scala.language.higherKinds
 import scala.language.implicitConversions
 
@@ -21,6 +23,11 @@ package object sop {
 
   // natural transform
   type NT[F[_], G[_]] = (F ~> G)
+
+  // Par companion boject
+  object Par {
+    def pure[F[_], A](a: A): Par[F, A] = FreeApplicative.pure[F, A](a)
+  }
 
   // lift F[A] to Par[F, A]
   def liftPar[F[_], A](fa: F[A]): Par[F, A] = FreeApplicative.lift(fa)
