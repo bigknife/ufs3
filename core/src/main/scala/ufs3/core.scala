@@ -15,9 +15,11 @@ import sop._
 import kernel.block._
 import kernel.fildex._
 import kernel.filler._
+import kernel.sandwich._
 import Filler._
 import Fildex._
 import Block._
+import Sandwich._
 
 package object core {
 
@@ -73,6 +75,35 @@ package object core {
         _ ← F.close(ufs3.fillerFile)
         _ ← FI.close(ufs3.fildexFile)
         _ ← B.close(ufs3.blockFile)
+      } yield ()
+      prog
+  }
+
+  // write a in: IN to UFS3
+  // 1. filler file allocate a start point for new sandwich (key → sandwich), got a start point
+  // 1. write sandwich head
+  // 2. travese sandwich body and write them
+  // 3. write sandwich tail
+  def write[F[_], IN](in: IN, out: UFS3)(implicit B: Block[F],
+                                         F: Filler[F],
+                                         FI: Fildex[F],
+                                         S: Sandwich[F, IN]): Kleisli[Id, CoreConfig, SOP[F, Unit]] = Kleisli {
+    coreConfig ⇒
+      val prog: Id[SOP[F, Unit]] = for {
+        startPos ← F.allocate(out.fillerFile)
+        _        ← B.seek(out.blockFile, startPos)
+        headB    ← S.head()
+        _        ← B.write(out.blockFile, headB)
+        _ ← {
+          def writeBody(): SOP[F, Unit] =
+            for {
+              obb ← S.nextBody(in)
+              _   ← if (obb.nonEmpty) writeBody() else Par.pure[F, Unit](()): SOP[F, Unit] // implicitly transformed by liftPAR_to_SOP
+            } yield ()
+          writeBody()
+        }
+        tailB ← S.tail()
+        _     ← B.write(out.blockFile, tailB)
       } yield ()
       prog
   }
