@@ -1,11 +1,10 @@
 package audit
 
 import audit.infr.{JsonFormat, RMSupport}
-import cats.{Id, ~>}
 import ufs3.kernel.audit.Audit
-import ufs3.kernel.audit.Audit.{AuditInfo, Begin, End, Process}
+import ufs3.kernel.audit.Audit.AuditInfo
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Future
 
 /**
   * Created by songwenchao on 2017/7/7.

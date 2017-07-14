@@ -35,7 +35,10 @@ object BlockInterpreter extends Block.Handler[Id] {
   override protected[this] def read(blockFile: Block.BlockFile, size: Block.Size): Id[ByteBuffer] =
     blockFile.read(size.sizeInByte)
 
-  override protected[this] def write(blockFile: Block.BlockFile, data: ByteBuffer): Id[Unit] = blockFile.write(data)
+  override protected[this] def write(blockFile: Block.BlockFile, data: ByteBuffer): Id[Unit] = {
+    val size = if (data.position() == 0) data.limit() else data.flip().limit()
+    blockFile.write(data, size)
+  }
 
   override protected[this] def lock(blockFile: Block.BlockFile): Id[Boolean] = {
     val lock = blockFile.lock()
@@ -50,4 +53,6 @@ object BlockInterpreter extends Block.Handler[Id] {
     val lock = lockMap.get(blockFile)
     if (lock != null) lock.release() else ()
   }
+
+  override protected[this] def existed(path: Block.Path): Id[Boolean] = new File(path.file.value.getPath).exists()
 }

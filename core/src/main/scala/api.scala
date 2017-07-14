@@ -35,7 +35,7 @@ object api {
   /**
     * create filler file if not existed
     */
-  def createIfNotExisted[F[_]](path: Path, size: Size)(implicit L: Log.Ops[F],
+  def createIfNotExisted[F[_]](path: Path, size: Size)(implicit L: Log.To[F],
                                                        S: Store.Ops[F]): Free[F, Response[Unit]] = {
     import L._
     import S._
@@ -64,7 +64,7 @@ object api {
   /**
     * open filler and lock it
     */
-  def openForWrite[F[_]](path: Path)(implicit L: Log.Ops[F], S: Store.Ops[F]): Free[F, Response[WritableFiller]] = {
+  def openForWrite[F[_]](path: Path)(implicit L: Log.To[F], S: Store.Ops[F]): Free[F, Response[WritableFiller]] = {
     import L._
     import S._
     for {
@@ -91,10 +91,10 @@ object api {
   /**
     * append data stream
     */
-  def appendData[F[_]](filler: WritableFiller)(implicit L: Log.Ops[F],
+  def appendData[F[_]](filler: WritableFiller)(implicit L: Log.To[F],
                                                S: Store.Ops[F],
                                                STREAM: Stream.Ops[F],
-                                               B: Backup.Ops[F]): Free[F, Response[Unit]] = {
+                                               B: Backup.To[F]): Free[F, Response[Unit]] = {
     import S._
     import STREAM._
     import Stream.Ops._
@@ -123,7 +123,7 @@ object api {
   /**
     * unlock and close
     */
-  def unlockAndClose[F[_]](filler: Filler)(implicit L: Log.Ops[F], S: Store.Ops[F]): Free[F, Response[Unit]] = {
+  def unlockAndClose[F[_]](filler: Filler)(implicit L: Log.To[F], S: Store.Ops[F]): Free[F, Response[Unit]] = {
     import S._
     for {
       _ ← unlock(filler)
@@ -134,7 +134,7 @@ object api {
   /**
     * open for read
     */
-  def openForRead[F[_]](path: Path)(implicit L: Log.Ops[F], S: Store.Ops[F]): Free[F, Response[ReadonlyFiller]] = {
+  def openForRead[F[_]](path: Path)(implicit L: Log.To[F], S: Store.Ops[F]): Free[F, Response[ReadonlyFiller]] = {
     import L._, S._
     for {
       rf ← open(path, FileMode.ReadOnly)

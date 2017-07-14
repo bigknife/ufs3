@@ -105,7 +105,7 @@ object Block {
     def close(): Unit
     def seek(pos: Long): Unit
     def read(size: Long): ByteBuffer
-    def write(data: ByteBuffer): Unit
+    def write(data: ByteBuffer, size: Long): Unit
     def lock(): FileLock
   }
   object BlockFile {
@@ -115,9 +115,9 @@ object Block {
       override def seek(pos: Long): Unit = underlying.seek(pos)
       override def read(size: Long): ByteBuffer =
         underlying.getChannel.map(FileChannel.MapMode.READ_ONLY, underlying.getChannel.position(), size)
-      override def write(data: ByteBuffer): Unit =
+      override def write(data: ByteBuffer, size: Long): Unit =
         underlying.getChannel
-          .map(FileChannel.MapMode.READ_WRITE, underlying.getChannel.position(), data.limit().toLong)
+          .map(FileChannel.MapMode.READ_WRITE, underlying.getChannel.position(), size)
           .put(data); ()
       override def lock(): FileLock = underlying.getChannel.tryLock()
 
