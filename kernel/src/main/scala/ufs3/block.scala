@@ -24,6 +24,7 @@ import sop._
 trait Block[F[_]] {
   import Block._
 
+  def existed(path: Path): Par[F, Boolean]
   def open(path: Path, mode: FileMode): Par[F, BlockFile]
   def close(bf: BlockFile): Par[F, Unit]
   def create(path: Path, size: Size): Par[F, BlockFile]
@@ -39,6 +40,7 @@ object Block {
   sealed trait Op[A]
 
   // Block Command
+  final case class Existed(path: Path)                    extends Op[Boolean]
   final case class Open(path: Path, mode: FileMode)       extends Op[BlockFile]
   final case class Close(bf: BlockFile)                   extends Op[Unit]
   final case class Create(path: Path, size: Size)         extends Op[BlockFile]
@@ -51,6 +53,7 @@ object Block {
 
   final class To[F[_]](implicit I: Inject[Op, F]) extends Block[F] {
 
+    def existed(path: Path): Par[F, Boolean]                 = liftPar_T[Op, F, Boolean](Existed(path))
     def open(path: Path, mode: FileMode): Par[F, BlockFile]  = liftPar_T[Op, F, BlockFile](Open(path, mode))
     def close(bf: BlockFile): Par[F, Unit]                   = liftPar_T[Op, F, Unit](Close(bf))
     def create(path: Path, size: Size): Par[F, BlockFile]    = liftPar_T[Op, F, BlockFile](Create(path, size))
@@ -67,6 +70,8 @@ object Block {
   def apply[F[_]](implicit B: Block[F]) = B
 
   trait Handler[M[_]] extends NT[Op, M] {
+
+    protected[this] def existed(path: Path): M[Boolean]
     protected[this] def open(path: Path, mode: FileMode): M[BlockFile]
     protected[this] def close(bf: BlockFile): M[Unit]
     protected[this] def create(path: Path, size: Size): M[BlockFile]
@@ -78,6 +83,7 @@ object Block {
     protected[this] def unlock(blockFile: BlockFile): M[Unit]
 
     override def apply[A](fa: Op[A]): M[A] = fa match {
+      case Existed(path)      ⇒ existed(path)
       case Open(path, mode)   ⇒ open(path, mode)
       case Close(bf)          ⇒ close(bf)
       case Create(path, size) ⇒ create(path, size)
