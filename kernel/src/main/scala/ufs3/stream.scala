@@ -35,7 +35,7 @@ object Stream {
     implicit val storeDataTransformer = new DataTransformer[ufs3.kernel.store.WriteData](sd ⇒ ???)
 
     //todo: add a transformer to Backup.Data
-    implicit val backupDataTransformer = new DataTransformer[ufs3.kernel.backup.Data](sd ⇒ ???)
+    implicit val backupDataTransformer = new DataTransformer[ufs3.kernel.backup.Backup.Data](sd ⇒ ???)
   }
 }
 

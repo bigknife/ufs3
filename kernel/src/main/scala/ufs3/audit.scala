@@ -10,71 +10,100 @@ package ufs3
 package kernel
 package audit
 
-import cats.free.{Free, Inject}
-import Free.inject
+import java.util.Date
+import cats.free.Inject
 import scala.language.higherKinds
 import scala.language.implicitConversions
+import sop._
 
 /**
   * Audit Free Monad
   */
-sealed trait Audit[A]
+sealed trait Audit[F[_]] {
+  import Audit._
+
+  def begin(auditInfo: BeginAudit): Par[F, Unit]
+  def process(auditInfo: ProcessAudit): Par[F, Unit]
+  def end(auditInfo: EndAudit): Par[F, Unit]
+}
 object Audit {
-  case class Begin(auditInfo: BeginAudit)     extends Audit[Unit]
-  case class Process(auditInfo: ProcessAudit) extends Audit[Unit]
-  case class End(auditInfo: EndAudit)         extends Audit[Unit]
 
-  class Ops[F[_]](implicit I: Inject[Audit, F]) {
-    def begin(auditInfo: BeginAudit): Free[F, Unit]     = inject[Audit, F](Begin(auditInfo))
-    def process(auditInfo: ProcessAudit): Free[F, Unit] = inject[Audit, F](Process(auditInfo))
-    def end(auditInfo: EndAudit): Free[F, Unit]         = inject[Audit, F](End(auditInfo))
+  sealed trait Op[A]
+
+  case class Begin(auditInfo: BeginAudit) extends Op[Unit]
+
+  case class Process(auditInfo: ProcessAudit) extends Op[Unit]
+
+  case class End(auditInfo: EndAudit) extends Op[Unit]
+
+  class To[F[_]](implicit I: Inject[Op, F]) extends Audit[F] {
+    def begin(auditInfo: BeginAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](Begin(auditInfo))
+
+    def process(auditInfo: ProcessAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](Process(auditInfo))
+
+    def end(auditInfo: EndAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](End(auditInfo))
   }
-  object Ops {
-    implicit def ops[F[_]](implicit I: Inject[Audit, F]) = new Ops[F]
-  }
-}
 
-/**
-  * AuditInfo
-  * ---------
-  * Audit Info
-  */
-sealed trait AuditInfo {
-  def token: String
-  def userId: String
-  def appId: String
-  def fileName: String
-  def size: Long
-  def mode: OperateMode
-}
+  implicit def to[F[_]](implicit I: Inject[Op, F]) = new To[F]
 
-sealed trait BeginAudit   extends AuditInfo
-sealed trait EndAudit     extends AuditInfo
-sealed trait ProcessAudit extends AuditInfo
+  def apply[F[_]](implicit A: Audit[F]): Audit[F] = A
 
-object AuditInfo {
-  def apply(tk: String, uid: String, app: String, targetFile: String, relSize: Long, opMode: OperateMode): AuditInfo =
-    new AuditInfo {
-      override def token: String     = tk
-      override def userId: String    = uid
-      override def appId: String     = app
-      override def fileName: String  = targetFile
-      override def size: Long        = relSize
-      override def mode: OperateMode = opMode
+  trait Handler[M[_]] extends NT[Op, M] {
+    protected[this] def begin(auditInfo: BeginAudit): M[Unit]
+
+    protected[this] def process(auditInfo: ProcessAudit): M[Unit]
+
+    protected[this] def end(auditInfo: EndAudit): M[Unit]
+
+    override def apply[A](fa: Op[A]): M[A] = fa match {
+      case Begin(auditInfo)   ⇒ begin(auditInfo)
+      case Process(auditInfo) ⇒ process(auditInfo)
+      case End(auditInfo)     ⇒ end(auditInfo)
     }
-}
-
-sealed trait OperateMode {
-  def description: String
-}
-
-object OperateMode {
-
-  case object WriteData extends OperateMode {
-    override def description: String = "write data"
   }
 
-  case object ReadData extends OperateMode {
-    override def description: String = "read data"
+  /**
+    * AuditInfo
+    * ---------
+    * Audit Info
+    */
+  sealed trait AuditInfo {
+    def time: Date
+
+    def app: String
+
+    def msg: String
   }
+
+  sealed trait BeginAudit extends AuditInfo
+
+  sealed trait EndAudit extends AuditInfo
+
+  sealed trait ProcessAudit extends AuditInfo
+
+  object AuditInfo {
+
+    case class Happening(time: Date, app: String, msg: String) extends BeginAudit
+
+    case class HappyEnding(time: Date, app: String, msg: String) extends EndAudit
+
+    case class SadEnding(time: Date, app: String, msg: String) extends EndAudit
+
+    case class Processing(time: Date, app: String, msg: String) extends ProcessAudit
+
+    def happening(time: Date, app: String, msg: String): BeginAudit = Happening(time, app, msg)
+
+    def happyEnding(time: Date, app: String, msg: String): EndAudit = HappyEnding(time, app, msg)
+
+    def sadEnding(time: Date, app: String, msg: String): EndAudit = SadEnding(time, app, msg)
+
+    def processing(time: Date, app: String, msg: String): ProcessAudit = Processing(time, app, msg)
+
+    def apply(reCordTime: Long, relApp: String, message: String): AuditInfo = new AuditInfo {
+      override def time: Date  = new Date(reCordTime)
+      override def app: String = relApp
+      override def msg: String = message
+    }
+  }
+
 }
