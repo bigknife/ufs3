@@ -7,6 +7,8 @@
   */
 package ufs3
 
+import java.io.IOException
+
 import cats.data.Kleisli
 import cats.Id
 
@@ -84,6 +86,7 @@ package object core {
   // 1. write sandwich head
   // 2. travese sandwich body and write them
   // 3. write sandwich tail
+  // TODO no index, no backup, no lock will be fixed at #17: add backup logic to core dsl
   def write[F[_], IN](in: IN, out: UFS3)(implicit B: Block[F],
                                          F: Filler[F],
                                          FI: Fildex[F],
@@ -106,5 +109,33 @@ package object core {
         _     ← B.write(out.blockFile, tailB)
       } yield ()
       prog
+  }
+
+  // read by key.
+  // 1. read start point of key from index
+  // 2. read from start to end
+  // add a stream out
+  def read[F[_]](key: String, bufferSize: Long, from: UFS3)(implicit B: Block[F],
+                        F: Filler[F],
+                        FI: Fildex[F]) = {
+    import Size._
+    for {
+      optIdx ← FI.fetch(key)
+      _ ← if (optIdx.nonEmpty) {
+        val startPoint = optIdx.get.startPoint
+        val endPoint = optIdx.get.endPoint
+        def readMore(pos: Long, length: Long, remain: Long) = for {
+          _ ← B.seek(from.blockFile, pos)
+          _ ← if (remain > 0) {
+            val toRead = Math.min(length, remain)
+            for {
+              bb ← B.read(from.blockFile, toRead.B)
+              _ ← readMore(pos + toRead, length, remain - toRead)
+            } yield ()
+
+          } else Par.pure(())
+        } yield ()
+      } else throw new IOException(s"no key=$key found")
+    } yield ()
   }
 }
