@@ -9,12 +9,18 @@ package ufs3
 package kernel
 package fildex
 
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+
+import cats.Eval
 import cats.free.Inject
 import filler.Filler.FillerFile
 
 import scala.language.higherKinds
 import scala.language.implicitConversions
 import sop._
+import ufs3.kernel.block.Block.{FileMode, Path}
 
 trait Fildex[F[_]] {
   import Fildex.FildexFile
@@ -66,6 +72,33 @@ object Fildex {
     }
   }
 
-  trait FildexFile
+  trait FildexFile {
+    def hostFiller: FillerFile
+    def writeData(data: ByteBuffer, size: Long): Unit
+    def seekToTail(): Unit
+    def close(): Unit
+    private var tailPosition: Long = 0L
+  }
+  object FildexFile {
+    private[this] final class RandomAccessFildexFile(private val underlying: RandomAccessFile,
+                                                     private val host: FillerFile)
+        extends FildexFile {
+      override def hostFiller: FillerFile = host
+
+      override def writeData(data: ByteBuffer, size: Long): Unit = {
+        val channel = underlying.getChannel
+        channel.map(FileChannel.MapMode.READ_WRITE, channel.position(), size).put(data)
+        tailPosition += size
+      }
+
+      override def seekToTail(): Unit = underlying.seek(tailPosition)
+
+      override def close(): Unit = underlying.close()
+    }
+
+    def apply(hostFiller: FillerFile): Eval[FildexFile] =
+      Eval.later(new RandomAccessFildexFile(new RandomAccessFile(s"${hostFiller.path}.index", "rw"), hostFiller))
+  }
+
   trait Data
 }
