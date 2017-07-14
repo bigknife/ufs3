@@ -28,6 +28,9 @@ package object sop {
   object Par {
     def pure[F[_], A](a: A): Par[F, A] = FreeApplicative.pure[F, A](a)
   }
+  object SOP {
+    def pure[F[_], A](a: A): SOP[F, A] = liftPAR_to_SOP(Par.pure[F, A](a))
+  }
 
   // lift F[A] to Par[F, A]
   def liftPar[F[_], A](fa: F[A]): Par[F, A] = FreeApplicative.lift(fa)

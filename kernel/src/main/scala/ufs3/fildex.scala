@@ -35,7 +35,7 @@ object Fildex {
   final case class Close(ff: FildexFile)  extends Op[Unit]
   final case class Fetch(key: String)     extends Op[Option[Idx]]
 
-  final case class Append(ff: FildexFile, key: String, startPos: Long, endPos: Long) extends Op[Unit]
+  final case class Append(ff: FildexFile, idx: Idx) extends Op[Unit]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Fildex[F] {
     def check(ff: FillerFile): Par[F, FildexFile]      = liftPar_T[Op, F, FildexFile](Check(ff))

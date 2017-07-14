@@ -25,8 +25,8 @@ import sop._
 object SandwitchTest {
   import sandwich._
   import cats.effect.IO
-  def interpreter(callback: ByteBuffer ⇒ Unit): Sandwich.Handler[IO, InputStream] = {
-    new Sandwich.Handler[IO, InputStream] {
+  def interpreter(callback: ByteBuffer ⇒ Unit): SandwichIn.Handler[IO, InputStream] = {
+    new SandwichIn.Handler[IO, InputStream] {
       def head(): IO[ByteBuffer] = IO { val buf = ByteBuffer.wrap("---HEAD--\r\n".getBytes); callback(buf); buf }
       def nextBody(in: InputStream): IO[Option[ByteBuffer]] = {
         val buffer = new Array[Byte](8 * 1024)
@@ -43,13 +43,13 @@ object SandwitchTest {
   }
 
   def test(): Unit = {
-    val sandwith = Sandwich[Sandwich.Op[InputStream, ?], InputStream]
+    val sandwith = SandwichIn[SandwichIn.Op[InputStream, ?], InputStream]
     import sandwith._
-    def allBody(ins: InputStream): SOP[Sandwich.Op[InputStream, ?], Unit] =
+    def allBody(ins: InputStream): SOP[SandwichIn.Op[InputStream, ?], Unit] =
       for {
         obb ← nextBody(ins)
         _ ← if (obb.nonEmpty) allBody(ins)
-        else Par.pure[Sandwich.Op[InputStream, ?], Unit](()): SOP[Sandwich.Op[InputStream, ?], Unit]
+        else Par.pure[SandwichIn.Op[InputStream, ?], Unit](()): SOP[SandwichIn.Op[InputStream, ?], Unit]
       } yield ()
     def program(in: InputStream) =
       for {

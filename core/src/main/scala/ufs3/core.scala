@@ -8,6 +8,7 @@
 package ufs3
 
 import java.io.IOException
+import java.nio.ByteBuffer
 
 import cats.data.Kleisli
 import cats.Id
@@ -21,7 +22,6 @@ import kernel.sandwich._
 import Filler._
 import Fildex._
 import Block._
-import Sandwich._
 
 package object core {
 
@@ -90,7 +90,7 @@ package object core {
   def write[F[_], IN](in: IN, out: UFS3)(implicit B: Block[F],
                                          F: Filler[F],
                                          FI: Fildex[F],
-                                         S: Sandwich[F, IN]): Kleisli[Id, CoreConfig, SOP[F, Unit]] = Kleisli {
+                                         S: SandwichIn[F, IN]): Kleisli[Id, CoreConfig, SOP[F, Unit]] = Kleisli {
     coreConfig ⇒
       val prog: Id[SOP[F, Unit]] = for {
         startPos ← F.allocate(out.fillerFile)
@@ -113,29 +113,54 @@ package object core {
 
   // read by key.
   // 1. read start point of key from index
-  // 2. read from start to end
-  // add a stream out
-  def read[F[_]](key: String, bufferSize: Long, from: UFS3)(implicit B: Block[F],
-                        F: Filler[F],
-                        FI: Fildex[F]) = {
+  // 2. read head
+  // 3. read body recursively
+  // 4. read tail
+  def read[F[_], Out](key: String, bufferSize: Long, from: UFS3, to: Out)(
+      implicit B: Block[F],
+      F: Filler[F],
+      FI: Fildex[F],
+      S: SandwichOut[F, Out]): Kleisli[Id, CoreConfig, SOP[F, Unit]] = Kleisli { coreConfig ⇒
     import Size._
-    for {
+    val prog: Id[SOP[F, Unit]] = for {
       optIdx ← FI.fetch(key)
       _ ← if (optIdx.nonEmpty) {
-        val startPoint = optIdx.get.startPoint
-        val endPoint = optIdx.get.endPoint
-        def readMore(pos: Long, length: Long, remain: Long) = for {
-          _ ← B.seek(from.blockFile, pos)
-          _ ← if (remain > 0) {
-            val toRead = Math.min(length, remain)
-            for {
-              bb ← B.read(from.blockFile, toRead.B)
-              _ ← readMore(pos + toRead, length, remain - toRead)
-            } yield ()
+        val startPoint     = optIdx.get.startPoint
+        val endPoint       = optIdx.get.endPoint
+        val headSize: Long = 0
+        val tailSize: Long = 0
 
-          } else Par.pure(())
+        def read(pos: Long, length: Long): SOP[F, ByteBuffer] =
+          for {
+            _  ← B.seek(from.blockFile, pos)
+            bb ← B.read(from.blockFile, length.B)
+          } yield bb
+
+        def readBody(pos: Long, length: Long, remain: Long): SOP[F, Unit] =
+          for {
+            _ ← B.seek(from.blockFile, pos)
+            _ ← if (remain > 0) {
+              val toRead = Math.min(length, remain)
+              for {
+                bb ← B.read(from.blockFile, toRead.B)
+                _  ← S.outputBody(bb, to)
+                _  ← readBody(pos + toRead, length, remain - toRead)
+              } yield ()
+            } else SOP.pure[F, Unit](())
+          } yield ()
+        // 1. read head
+        // 2. read body recursively
+        // 3. read tail
+        for {
+          headB ← read(startPoint, headSize)
+          _     ← S.head(headB)
+          _     ← readBody(startPoint + headSize, bufferSize, endPoint - startPoint - headSize - tailSize)
+          tailB ← read(endPoint - tailSize, tailSize)
+          _     ← S.tail(tailB)
         } yield ()
+
       } else throw new IOException(s"no key=$key found")
     } yield ()
+    prog
   }
 }
