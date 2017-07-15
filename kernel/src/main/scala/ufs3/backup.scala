@@ -9,9 +9,10 @@ package ufs3
 package kernel
 package backup
 
+import java.nio.ByteBuffer
+
 import scala.language.higherKinds
 import scala.language.implicitConversions
-
 import cats.free.Inject
 import sop._
 
@@ -21,22 +22,20 @@ import sop._
   * UFS3 Backup adt
   */
 sealed trait Backup[F[_]] {
-  import Backup.Data
-
   def open(): Par[F, Unit]
   def close(): Par[F, Unit]
-  def send(data: Data): Par[F, Unit]
+  def send(data: ByteBuffer): Par[F, Unit]
 }
 object Backup {
   sealed trait Op[A]
   case object Open            extends Op[Unit]
   case object Close           extends Op[Unit]
-  case class Send(data: Data) extends Op[Unit]
+  case class Send(data: ByteBuffer) extends Op[Unit]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Backup[F] {
     override def open(): Par[F, Unit]           = liftPar_T[Op, F, Unit](Open)
     override def close(): Par[F, Unit]          = liftPar_T[Op, F, Unit](Close)
-    override def send(data: Data): Par[F, Unit] = liftPar_T[Op, F, Unit](Send(data))
+    override def send(data: ByteBuffer): Par[F, Unit] = liftPar_T[Op, F, Unit](Send(data))
   }
 
   implicit def to[F[_]](implicit I: Inject[Op, F]) = new To[F]
@@ -45,7 +44,7 @@ object Backup {
   trait Handler[M[_]] extends NT[Op, M] {
     protected[this] def open(): M[Unit]
     protected[this] def close(): M[Unit]
-    protected[this] def send(data: Data): M[Unit]
+    protected[this] def send(data: ByteBuffer): M[Unit]
 
     override def apply[A](fa: Op[A]): M[A] = fa match {
       case Open ⇒ open()
@@ -53,13 +52,5 @@ object Backup {
       case Send(data) ⇒ send(data)
     }
   }
-
-  /**
-    * Data
-    * ----
-    * Backup Data
-    */
-  sealed trait Data
-
 }
 

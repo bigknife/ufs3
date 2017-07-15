@@ -27,7 +27,7 @@ object SandwitchTest {
   import cats.effect.IO
   def interpreter(callback: ByteBuffer ⇒ Unit): SandwichIn.Handler[IO, InputStream] = {
     new SandwichIn.Handler[IO, InputStream] {
-      def head(): IO[ByteBuffer] = IO { val buf = ByteBuffer.wrap("---HEAD--\r\n".getBytes); callback(buf); buf }
+      def head(key: String, bodyLength: Long): IO[ByteBuffer] = IO { val buf = ByteBuffer.wrap("---HEAD--\r\n".getBytes); callback(buf); buf }
       def nextBody(in: InputStream): IO[Option[ByteBuffer]] = {
         val buffer = new Array[Byte](8 * 1024)
         val readed = in.read(buffer)
@@ -53,7 +53,7 @@ object SandwitchTest {
       } yield ()
     def program(in: InputStream) =
       for {
-        _ ← head()
+        _ ← head(key = "hi", bodyLength = 10)
         _ ← allBody(in)
         _ ← tail()
       } yield ()

@@ -22,6 +22,7 @@ import kernel.sandwich._
 import Filler._
 import Fildex._
 import Block._
+import ufs3.kernel.backup.Backup
 
 package object core {
 
@@ -61,6 +62,7 @@ package object core {
         blockFile  ← if (being) B.open(path, mode) else B.create(path, size)
         fillerFile ← if (being) F.check(blockFile) else F.check(blockFile)
         fildexFile ← if (being) FI.check(fillerFile) else FI.create(fillerFile)
+        _          ← B.lock(blockFile) // lock when startup
       } yield UFS3(blockFile, fillerFile, fildexFile)
       prog
     }
@@ -77,6 +79,7 @@ package object core {
         _ ← F.close(ufs3.fillerFile)
         _ ← FI.close(ufs3.fildexFile)
         _ ← B.close(ufs3.blockFile)
+        _ ← B.unlock(ufs3.blockFile)
       } yield ()
       prog
   }
@@ -86,30 +89,35 @@ package object core {
   // 1. write sandwich head
   // 2. travese sandwich body and write them
   // 3. write sandwich tail
-  // TODO no index, no backup, no lock will be fixed at #17: add backup logic to core dsl
-  def write[F[_], IN](in: IN, out: UFS3)(implicit B: Block[F],
-                                         F: Filler[F],
-                                         FI: Fildex[F],
-                                         S: SandwichIn[F, IN]): Kleisli[Id, CoreConfig, SOP[F, Unit]] = Kleisli {
-    coreConfig ⇒
+  // Done: no index, no backup, no lock will be fixed at #17: add backup logic to core dsl
+  def write[F[_], IN](key: String, length: Long, in: IN, out: UFS3)(implicit B: Block[F],
+                                                      F: Filler[F],
+                                                      BAK: Backup[F],
+                                                      FI: Fildex[F],
+                                                      S: SandwichIn[F, IN]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
+    Kleisli { coreConfig ⇒
       val prog: Id[SOP[F, Unit]] = for {
         startPos ← F.allocate(out.fillerFile)
         _        ← B.seek(out.blockFile, startPos)
-        headB    ← S.head()
+        headB    ← S.head(key, length)
         _        ← B.write(out.blockFile, headB)
-        _ ← {
-          def writeBody(): SOP[F, Unit] =
+        _        ← BAK.send(headB) //backup
+        bodyLength ← {
+          def writeBody(): SOP[F, Long] =
             for {
-              obb ← S.nextBody(in)
-              _   ← if (obb.nonEmpty) writeBody() else Par.pure[F, Unit](()): SOP[F, Unit] // implicitly transformed by liftPAR_to_SOP
-            } yield ()
+              obb        ← S.nextBody(in)
+              nextLength ← if (obb.nonEmpty) writeBody() else Par.pure[F, Long](0): SOP[F, Long] // implicitly transformed by liftPAR_to_SOP
+              _          ← if (obb.nonEmpty) BAK.send(obb.get) else Par.pure[F, Unit](()) // backup body
+            } yield nextLength + obb.map(_.array().length).getOrElse(0)
           writeBody()
         }
         tailB ← S.tail()
         _     ← B.write(out.blockFile, tailB)
+        _     ← BAK.send(tailB)
+        _     ← FI.append(out.fildexFile, Idx(key, startPos, headB.array().length + bodyLength + tailB.array().length))
       } yield ()
       prog
-  }
+    }
 
   // read by key.
   // 1. read start point of key from index
