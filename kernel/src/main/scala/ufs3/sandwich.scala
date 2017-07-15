@@ -19,20 +19,21 @@ import scala.language.implicitConversions
 import sop._
 
 trait SandwichIn[F[_], In] {
-  def head(): Par[F, ByteBuffer]
+  def head(key: String, bodyLength: Long): Par[F, ByteBuffer]
   def nextBody(in: In): Par[F, Option[ByteBuffer]]
   def tail(): Par[F, ByteBuffer]
 }
 object SandwichIn {
   trait Op[In, A]
-  final case class Head[In]()    extends Op[In, ByteBuffer]
-  final case class NextBody[In](in: In) extends Op[In, Option[ByteBuffer]]
-  final case class Tail[In]()    extends Op[In, ByteBuffer]
+  final case class Head[In](key: String, bodyLength: Long) extends Op[In, ByteBuffer]
+  final case class NextBody[In](in: In)                    extends Op[In, Option[ByteBuffer]]
+  final case class Tail[In]()                              extends Op[In, ByteBuffer]
 
   class To[F[_], In](implicit IJ: Inject[Op[In, ?], F]) extends SandwichIn[F, In] {
     def nextBody(in: In): Par[F, Option[ByteBuffer]] = liftPar_T[Op[In, ?], F, Option[ByteBuffer]](NextBody[In](in))
-    def head(): Par[F, ByteBuffer]             = liftPar_T[Op[In, ?], F, ByteBuffer](Head[In]())
-    def tail(): Par[F, ByteBuffer]             = liftPar_T[Op[In, ?], F, ByteBuffer](Tail[In]())
+    def head(key: String, bodyLength: Long): Par[F, ByteBuffer] =
+      liftPar_T[Op[In, ?], F, ByteBuffer](Head[In](key, bodyLength))
+    def tail(): Par[F, ByteBuffer] = liftPar_T[Op[In, ?], F, ByteBuffer](Tail[In]())
   }
 
   implicit def to[F[_], In](implicit IJ: Inject[Op[In, ?], F]): SandwichIn[F, In] = new To[F, In]
@@ -40,14 +41,14 @@ object SandwichIn {
   def apply[F[_], In](implicit S: SandwichIn[F, In]): SandwichIn[F, In] = S
 
   trait Handler[M[_], In] extends NT[Op[In, ?], M] {
-    def head(): M[ByteBuffer]
+    def head(key: String, bodyLength: Long): M[ByteBuffer]
     def nextBody(in: In): M[Option[ByteBuffer]]
     def tail(): M[ByteBuffer]
 
     def apply[A](fa: Op[In, A]): M[A] = fa match {
-      case Head() ⇒ head()
-      case NextBody(in) ⇒ nextBody(in)
-      case Tail() ⇒ tail()
+      case Head(key, bodyLength) ⇒ head(key, bodyLength)
+      case NextBody(in)          ⇒ nextBody(in)
+      case Tail()                ⇒ tail()
     }
   }
 }
@@ -59,14 +60,14 @@ trait SandwichOut[F[_], Out] {
 }
 object SandwichOut {
   sealed trait Op[Out, A]
-  final case class Head[Out](bb: ByteBuffer) extends Op[Out, Unit]
+  final case class Head[Out](bb: ByteBuffer)                   extends Op[Out, Unit]
   final case class OutputBody[Out](body: ByteBuffer, out: Out) extends Op[Out, Unit]
-  final case class Tail[Out](bb: ByteBuffer) extends Op[Out, Unit]
+  final case class Tail[Out](bb: ByteBuffer)                   extends Op[Out, Unit]
 
-  class To[F[_], Out](implicit I: Inject[Op[Out, ?], F]) extends SandwichOut[F, Out]{
-    def head(bb: ByteBuffer): Par[F, Unit] = liftPar_T[Op[Out, ?], F, Unit](Head(bb))
+  class To[F[_], Out](implicit I: Inject[Op[Out, ?], F]) extends SandwichOut[F, Out] {
+    def head(bb: ByteBuffer): Par[F, Unit]                   = liftPar_T[Op[Out, ?], F, Unit](Head(bb))
     def outputBody(body: ByteBuffer, out: Out): Par[F, Unit] = liftPar_T[Op[Out, ?], F, Unit](OutputBody(body, out))
-    def tail(bb: ByteBuffer): Par[F, Unit] = liftPar_T[Op[Out, ?], F, Unit](Tail(bb))
+    def tail(bb: ByteBuffer): Par[F, Unit]                   = liftPar_T[Op[Out, ?], F, Unit](Tail(bb))
   }
 
   implicit def to[F[_], Out](implicit I: Inject[Op[Out, ?], F]): SandwichOut[F, Out] = new To[F, Out]
@@ -79,9 +80,9 @@ object SandwichOut {
     def tail(bb: ByteBuffer): M[Unit]
 
     def apply[A](fa: Op[Out, A]): M[A] = fa match {
-      case Head(bb) ⇒ head(bb)
+      case Head(bb)              ⇒ head(bb)
       case OutputBody(body, out) ⇒ outputBody(body, out)
-      case Tail(bb) ⇒ tail(bb)
+      case Tail(bb)              ⇒ tail(bb)
     }
   }
 }
