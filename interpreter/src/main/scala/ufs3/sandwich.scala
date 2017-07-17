@@ -103,3 +103,45 @@ object SandwichOutInterpreter {
 
   def apply(): SandwichOutInterpreter = new SandwichOutInterpreter {}
 }
+
+
+trait SandwichInInterpreter extends SandwichIn.Handler[Kleisli[IO, SandwichInInterpreter.Config, ?], InputStream] {
+  def head(key: String, bodyLength: Long): Kleisli[IO, SandwichInInterpreter.Config, ByteBuffer] = Kleisli {config ⇒
+    IO {
+      val bb = ByteBuffer.allocate(Sandwich.HEAD_LENGTH)
+      bb.put(Sandwich.HEAD_MAGIC) // 4bytes magic
+      bb.putLong(System.currentTimeMillis()) // 8bytes create time
+      val keyHash = MessageDigest.getInstance("MD5").digest(key.getBytes("UTF-8"))
+      bb.put(keyHash) // 32bytes key md5 hash
+      bb.putLong(bodyLength) // 8bytes body length
+      bb.flip()
+      bb
+    }
+  }
+
+  def nextBody(in: InputStream): Kleisli[IO, SandwichInInterpreter.Config, Option[ByteBuffer]] = Kleisli {config ⇒
+    IO {
+      val buff = new Array[Byte](config.inputBufferSize)
+      val readed = in.read(buff)
+      if (readed != -1) Some(ByteBuffer.wrap(buff, 0, readed))
+      else None
+    }
+
+  }
+
+  def tail(hash: String): Kleisli[IO, SandwichInInterpreter.Config, ByteBuffer] = Kleisli {config ⇒
+    IO {
+      val bytes = hash.getBytes("iso8859_1")
+      if (bytes.length != Sandwich.TAIL_LENGTH) throw new java.io.IOException(s"the Sandwich tail size SHOULD BE ${Sandwich.TAIL_LENGTH}")
+      else ByteBuffer.wrap(bytes)
+    }
+  }
+}
+
+object SandwichInInterpreter {
+  trait Config {
+    def inputBufferSize: Long
+  }
+
+  def apply(): SandwichInInterpreter = new SandwichInInterpreter {}
+}
