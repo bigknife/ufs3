@@ -10,7 +10,7 @@ import infr.{JsonFormat, RMSupport}
 import ufs3.audit.interprer.AuditInterpreter.Config
 import ufs3.kernel.audit.Audit
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 /**
   * Created by songwenchao on 2017/7/17.
@@ -25,7 +25,7 @@ trait AuditInterpreter extends Audit.Handler[Kleisli[IO, Config, Unit]] {
     import rmSupport._
     uriRef.set(config.mongoUri)
     IO {
-      implicit val auditJsonFormat = JsonFormat.BeginAuditJsonFormat
+      implicit val auditJsonFormat = JsonFormat.BeginAuditFormat
       insertInto(config.collectionName, auditInfo.toJson)
     }
   }
@@ -34,7 +34,7 @@ trait AuditInterpreter extends Audit.Handler[Kleisli[IO, Config, Unit]] {
     import rmSupport._
     uriRef.set(config.mongoUri)
     IO {
-      implicit val auditJsonFormat = JsonFormat.ProcessAuditJsonFormat
+      implicit val auditJsonFormat = JsonFormat.ProcessAuditFormat
       insertInto(config.collectionName, auditInfo.toJson)
     }
   }
@@ -43,7 +43,7 @@ trait AuditInterpreter extends Audit.Handler[Kleisli[IO, Config, Unit]] {
     import rmSupport._
     uriRef.set(config.mongoUri)
     IO {
-      implicit val auditJsonFormat = JsonFormat.EndAuditJsonFormat
+      implicit val auditJsonFormat = JsonFormat.EndAuditFormat
       insertInto(config.collectionName, auditInfo.toJson)
     }
   }

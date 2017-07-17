@@ -73,32 +73,9 @@ object Audit {
     def msg: String
   }
 
-  sealed trait BeginAudit extends AuditInfo
-  object BeginAudit {
-    def apply(_time: Long, _app: String, _msg: String): BeginAudit = new BeginAudit {
-      override def time: Date  = new Date(_time)
-      override def app: String = _app
-      override def msg: String = _msg
-    }
-  }
-
-  sealed trait EndAudit extends AuditInfo
-  object EndAudit {
-    def apply(_time: Long, _app: String, _msg: String): EndAudit = new EndAudit {
-      override def time: Date  = new Date(_time)
-      override def app: String = _app
-      override def msg: String = _msg
-    }
-  }
-
+  sealed trait BeginAudit   extends AuditInfo
+  sealed trait EndAudit     extends AuditInfo
   sealed trait ProcessAudit extends AuditInfo
-  object ProcessAudit {
-    def apply(_time: Long, _app: String, _msg: String): ProcessAudit = new ProcessAudit {
-      override def time: Date  = new Date(_time)
-      override def app: String = _app
-      override def msg: String = _msg
-    }
-  }
 
   object AuditInfo {
 
@@ -118,6 +95,11 @@ object Audit {
 
     def processing(time: Date, app: String, msg: String): ProcessAudit = Processing(time, app, msg)
 
+    def apply(_time: Long, _app: String, _msg: String): AuditInfo = new AuditInfo {
+      override def time: Date  = new Date(_time)
+      override def app: String = _app
+      override def msg: String = _msg
+    }
   }
 
 }
