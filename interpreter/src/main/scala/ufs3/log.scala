@@ -51,3 +51,7 @@ trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, Unit]] {
   }
 
 }
+
+object LogInterpreter {
+  def apply(): LogInterpreter = new LogInterpreter {}
+}
