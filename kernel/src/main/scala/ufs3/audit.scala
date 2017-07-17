@@ -69,16 +69,12 @@ object Audit {
     */
   sealed trait AuditInfo {
     def time: Date
-
     def app: String
-
     def msg: String
   }
 
-  sealed trait BeginAudit extends AuditInfo
-
-  sealed trait EndAudit extends AuditInfo
-
+  sealed trait BeginAudit   extends AuditInfo
+  sealed trait EndAudit     extends AuditInfo
   sealed trait ProcessAudit extends AuditInfo
 
   object AuditInfo {
@@ -99,10 +95,10 @@ object Audit {
 
     def processing(time: Date, app: String, msg: String): ProcessAudit = Processing(time, app, msg)
 
-    def apply(recordTime: Long, relApp: String, message: String): AuditInfo = new AuditInfo {
-      override def time: Date  = new Date(recordTime)
-      override def app: String = relApp
-      override def msg: String = message
+    def apply(_time: Long, _app: String, _msg: String): AuditInfo = new AuditInfo {
+      override def time: Date  = new Date(_time)
+      override def app: String = _app
+      override def msg: String = _msg
     }
   }
 

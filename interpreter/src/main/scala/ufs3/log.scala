@@ -10,7 +10,7 @@ import ufs3.kernel.log.Log
 /**
   * Created by songwenchao on 2017/7/17.
   */
-trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, Unit]] {
+trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, ?]] {
 
   private lazy val logger: Logger = Logger.getLogger(getClass.getName)
 
