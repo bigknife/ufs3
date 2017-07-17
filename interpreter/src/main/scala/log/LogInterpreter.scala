@@ -4,6 +4,7 @@ import org.apache.log4j.Logger
 import ufs3.kernel.log.Log
 
 import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by songwenchao on 2017/7/5.

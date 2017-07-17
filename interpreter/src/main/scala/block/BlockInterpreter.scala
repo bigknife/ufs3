@@ -28,7 +28,7 @@ object BlockInterpreter extends Block.Handler[Id] {
     BlockFile(path, FileMode.ReadWrite).value
   }
 
-  override protected[this] def delete(path: Block.Path): Id[Unit] = new File(path.file.value.getPath).delete(); ()
+  override protected[this] def delete(path: Block.Path): Id[Unit] = { new File(path.file.value.getPath).delete(); () }
 
   override protected[this] def seek(blockFile: Block.BlockFile, pos: Long): Id[Unit] = blockFile.seek(pos)
 
@@ -37,7 +37,7 @@ object BlockInterpreter extends Block.Handler[Id] {
 
   override protected[this] def write(blockFile: Block.BlockFile, data: ByteBuffer): Id[Unit] = {
     val size = if (data.position() == 0) data.limit() else data.flip().limit()
-    blockFile.write(data, size)
+    blockFile.write(data, size.toLong)
   }
 
   override protected[this] def lock(blockFile: Block.BlockFile): Id[Boolean] = {

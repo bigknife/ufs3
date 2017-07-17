@@ -115,10 +115,11 @@ object Block {
       override def seek(pos: Long): Unit = underlying.seek(pos)
       override def read(size: Long): ByteBuffer =
         underlying.getChannel.map(FileChannel.MapMode.READ_ONLY, underlying.getChannel.position(), size)
-      override def write(data: ByteBuffer, size: Long): Unit =
+      override def write(data: ByteBuffer, size: Long): Unit = {
         underlying.getChannel
           .map(FileChannel.MapMode.READ_WRITE, underlying.getChannel.position(), size)
           .put(data); ()
+      }
       override def lock(): FileLock = underlying.getChannel.tryLock()
 
     }

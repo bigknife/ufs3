@@ -99,8 +99,8 @@ object Audit {
 
     def processing(time: Date, app: String, msg: String): ProcessAudit = Processing(time, app, msg)
 
-    def apply(reCordTime: Long, relApp: String, message: String): AuditInfo = new AuditInfo {
-      override def time: Date  = new Date(reCordTime)
+    def apply(recordTime: Long, relApp: String, message: String): AuditInfo = new AuditInfo {
+      override def time: Date  = new Date(recordTime)
       override def app: String = relApp
       override def msg: String = message
     }

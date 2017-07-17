@@ -15,12 +15,10 @@ import java.nio.channels.FileChannel
 
 import cats.Eval
 import cats.free.Inject
-import filler.Filler.FillerFile
-
-import scala.language.higherKinds
-import scala.language.implicitConversions
 import sop._
-import ufs3.kernel.block.Block.{FileMode, Path}
+import ufs3.kernel.filler.Filler.FillerFile
+
+import scala.language.{higherKinds, implicitConversions}
 
 trait Fildex[F[_]] {
   import Fildex.FildexFile
@@ -77,7 +75,7 @@ object Fildex {
     def writeData(data: ByteBuffer, size: Long): Unit
     def seekToTail(): Unit
     def close(): Unit
-    private var tailPosition: Long = 0L
+    protected var tailPosition: Long = 0L
   }
   object FildexFile {
     private[this] final class RandomAccessFildexFile(private val underlying: RandomAccessFile,

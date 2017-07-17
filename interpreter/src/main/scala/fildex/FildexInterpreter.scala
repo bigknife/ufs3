@@ -53,13 +53,15 @@ object FildexInterpreter extends Fildex.Handler[Id] {
             totalSize += 48
           } else {
             ff.seekToTail()
-            ff.writeData(buffer, buffer.flip().limit())
+            ff.writeData(buffer, buffer.flip().limit().toLong)
             buffer.clear()
             totalSize -= buffer.capacity()
           }
         }
-        if (totalSize > 0 && buffer.position() > 0) ff.writeData(buffer, buffer.flip().limit())
-        else ()
+        if (totalSize > 0 && buffer.position() > 0) {
+          ff.seekToTail()
+          ff.writeData(buffer, buffer.flip().limit().toLong)
+        } else ()
       case _ ⇒ throw new IllegalArgumentException("can't handle message,only receive tuple3 in correct style")
     }
   }

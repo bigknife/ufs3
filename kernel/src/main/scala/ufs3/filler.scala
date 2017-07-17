@@ -55,6 +55,8 @@ object Filler {
     def path: String
   }
   object FillerFile {
-    def apply(): FillerFile = new FillerFile() {}
+    def apply(): FillerFile = new FillerFile() {
+      override def path: String = ???
+    }
   }
 }
