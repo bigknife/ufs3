@@ -34,7 +34,6 @@ object Sandwich {
 trait SandwichOutInterpreter extends SandwichOut.Handler[Kleisli[IO, SandwichOutInterpreter.Config, ?], OutputStream] {
   case class Buffer(list: List[Byte])
 
-  @volatile
   private[this] val cache = AtomicMap[OutputStream, Buffer]
 
   def head(bb: ByteBuffer, out: OutputStream): Kleisli[IO, SandwichOutInterpreter.Config, Unit] = Kleisli { config ⇒
@@ -51,7 +50,7 @@ trait SandwichOutInterpreter extends SandwichOut.Handler[Kleisli[IO, SandwichOut
   def outputBody(body: ByteBuffer, out: OutputStream): Kleisli[IO, SandwichOutInterpreter.Config, Unit] = Kleisli {
     config ⇒
       IO {
-        val cached = cache.get(out)
+        val cached = cache(out)
         if (cached.isDefined) {
           // if buffered size + body size is below the `outputBufferSize` in the config, then  buffer it
           // or write buffered bytes and body, clear the buffer.
@@ -61,14 +60,15 @@ trait SandwichOutInterpreter extends SandwichOut.Handler[Kleisli[IO, SandwichOut
             if (cached.get.list.nonEmpty) {
               out.write(cached.get.list.toArray)
             }
-            out.write(body)
+            out.write(body.array())
 
             // clear the buffer
             cache += (out → Buffer(List.empty[Byte]))
           }else {
 
-            def addedBuffer() = cache(out).map(bb ⇒ ByteBuffer.wrap(bb.array() + body.array()))
-            cache += (out → addedBuffer())
+            def addedBuffer(): Option[Buffer] = cache(out).map(bb ⇒ ByteBuffer.wrap(bb.list.toArray[Byte] ++ body.array()))
+              .map(x ⇒ Buffer(x.array().toList))
+            cache += (out → addedBuffer().get)
           }
         }
 
@@ -78,11 +78,11 @@ trait SandwichOutInterpreter extends SandwichOut.Handler[Kleisli[IO, SandwichOut
   def tail(bb: ByteBuffer, out: OutputStream): Kleisli[IO, SandwichOutInterpreter.Config, Unit] = Kleisli { config ⇒
     IO {
       try {
-        if (body.array().length == Sandwich.TAIL_LENGTH) {
+        if (bb.array().length == Sandwich.TAIL_LENGTH) {
           // if has cache, write
-          val cached = cache.get(out)
+          val cached = cache(out)
           if (cached.isDefined) out.write(cached.get.list.toArray)
-          out.write(body.array())
+          out.write(bb.array())
           out.flush()
         }
         else throw new java.io.IOException(s"the Sandwich tail size SHOULD BE ${Sandwich.TAIL_LENGTH}")
@@ -98,7 +98,9 @@ object SandwichOutInterpreter {
   trait Config {
     def outputBufferSize: Long
   }
-  private[this] case object ConfigInstance extends Config
+  private[this] case object ConfigInstance extends Config {
+    def outputBufferSize: Long = 8192
+  }
   def config(): Config = ConfigInstance
 
   def apply(): SandwichOutInterpreter = new SandwichOutInterpreter {}
@@ -140,7 +142,7 @@ trait SandwichInInterpreter extends SandwichIn.Handler[Kleisli[IO, SandwichInInt
 
 object SandwichInInterpreter {
   trait Config {
-    def inputBufferSize: Long
+    def inputBufferSize: Int
   }
 
   def apply(): SandwichInInterpreter = new SandwichInInterpreter {}

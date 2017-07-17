@@ -41,7 +41,6 @@ lazy val interpreter = (project in file("interpreter"))
   .settings(
     resolvers += "BarcsysRepo" at "https://repox.barcsys.com/",
     libraryDependencies += "log4j"             % "log4j"           % "1.2.17",
-    libraryDependencies += "com.typesafe.akka" %% "akka-actor"     % "2.5.3",
     libraryDependencies += "org.reactivemongo" %% "reactivemongo"  % "0.11.14",
     libraryDependencies += "io.spray"          % "spray-json_2.11" % "1.3.3",
     libraryDependencies += "com.barcsys" %% "barcsys_tcp_connection" % "1.0.10",

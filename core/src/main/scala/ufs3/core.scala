@@ -111,7 +111,8 @@ package object core {
             } yield nextLength + obb.map(_.array().length).getOrElse(0)
           writeBody()
         }
-        tailB ← S.tail()
+      //TODO calcute the md5
+        tailB ← S.tail("md5")
         _     ← B.write(out.blockFile, tailB)
         _     ← BAK.send(tailB)
         _     ← FI.append(out.fildexFile, Idx(key, startPos, headB.array().length + bodyLength + tailB.array().length))
@@ -161,10 +162,10 @@ package object core {
         // 3. read tail
         for {
           headB ← read(startPoint, headSize)
-          _     ← S.head(headB)
+          _     ← S.head(headB, to)
           _     ← readBody(startPoint + headSize, bufferSize, endPoint - startPoint - headSize - tailSize)
           tailB ← read(endPoint - tailSize, tailSize)
-          _     ← S.tail(tailB)
+          _     ← S.tail(tailB, to)
         } yield ()
 
       } else throw new IOException(s"no key=$key found")

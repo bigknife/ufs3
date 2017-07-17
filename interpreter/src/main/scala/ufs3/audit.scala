@@ -15,7 +15,7 @@ import scala.concurrent.ExecutionContext
 /**
   * Created by songwenchao on 2017/7/17.
   */
-trait AuditInterpreter extends Audit.Handler[Kleisli[IO, Config, Unit]] {
+trait AuditInterpreter extends Audit.Handler[Kleisli[IO, Config, ?]] {
   import spray.json._
   private lazy val uriRef = new AtomicReference[String]
   private lazy val rmSupport = new RMSupport {
