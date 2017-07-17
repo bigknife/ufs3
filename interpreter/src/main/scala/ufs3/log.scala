@@ -6,15 +6,16 @@ import cats.data.Kleisli
 import cats.effect.IO
 import org.apache.log4j.Logger
 import ufs3.kernel.log.Log
+import ufs3.log.interpreter.LogInterpreter.Config
 
 /**
   * Created by songwenchao on 2017/7/17.
   */
-trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, ?]] {
+trait LogInterpreter extends Log.Handler[Kleisli[IO, Config, ?]] {
 
   private lazy val logger: Logger = Logger.getLogger(getClass.getName)
 
-  override def debug(msg: String, cause: Option[Throwable]): Kleisli[IO, Unit, Unit] = Kleisli { _ ⇒
+  override def debug(msg: String, cause: Option[Throwable]): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
     IO {
       cause match {
         case Some(t) ⇒ logger.debug(msg, t)
@@ -23,7 +24,7 @@ trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, ?]] {
     }
   }
 
-  override def info(msg: String, cause: Option[Throwable]): Kleisli[IO, Unit, Unit] = Kleisli { _ ⇒
+  override def info(msg: String, cause: Option[Throwable]): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
     IO {
       cause match {
         case Some(t) ⇒ logger.info(msg, t)
@@ -32,7 +33,7 @@ trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, ?]] {
     }
   }
 
-  override def warn(msg: String, cause: Option[Throwable]): Kleisli[IO, Unit, Unit] = Kleisli { _ ⇒
+  override def warn(msg: String, cause: Option[Throwable]): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
     IO {
       cause match {
         case Some(t) ⇒ logger.warn(msg, t)
@@ -41,7 +42,7 @@ trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, ?]] {
     }
   }
 
-  override def error(msg: String, cause: Option[Throwable]): Kleisli[IO, Unit, Unit] = Kleisli { _ ⇒
+  override def error(msg: String, cause: Option[Throwable]): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
     IO {
       cause match {
         case Some(t) ⇒ logger.error(msg, t)
@@ -53,5 +54,10 @@ trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, ?]] {
 }
 
 object LogInterpreter {
+
+  trait Config
+
+  def config(): Config = new Config {}
+
   def apply(): LogInterpreter = new LogInterpreter {}
 }
