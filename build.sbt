@@ -35,7 +35,6 @@ lazy val core = (project in file("core"))
   .dependsOn(kernel)
   .settings(commonSettings: _*)
 
-
 lazy val interpreter = (project in file("interpreter"))
   .dependsOn(core)
   .settings(commonSettings: _*)
