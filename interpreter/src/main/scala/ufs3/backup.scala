@@ -17,7 +17,6 @@ import ufs3.kernel.backup._
 import Backup._
 import cats.data.Kleisli
 import cats.effect.IO
-import sop._
 import BackupInterpreter._
 import akka.actor.ActorSystem
 import akka.util.ByteString
