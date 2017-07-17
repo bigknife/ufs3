@@ -15,12 +15,12 @@ import scala.util.{Failure, Success}
   */
 trait RMSupport {
 
-  val mongoUri: String
+  val mongoConnUri: String
 
-  private[RMSupport] lazy val dbName = MongoConnection.parseURI(mongoUri).get.db.get
+  private[RMSupport] lazy val dbName = MongoConnection.parseURI(mongoConnUri).get.db.get
   private[RMSupport] lazy val driver = new MongoDriver
   private[RMSupport] lazy val connection: Future[MongoConnection] =
-    Future.fromTry(MongoConnection.parseURI(mongoUri).map(driver.connection))
+    Future.fromTry(MongoConnection.parseURI(mongoConnUri).map(driver.connection))
 
   def collection(name: String): Future[BSONCollection] =
     for {
