@@ -1,6 +1,4 @@
 import sbt.Keys._
-import coursier._
-
 
 //moodify your orgnization and version
 lazy val commonSettings = Seq(
@@ -22,6 +20,16 @@ lazy val commonSettings = Seq(
   resolvers += Resolver.sonatypeRepo("releases"),
   addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
 )
+
+lazy val interpreter = (project in file("interpreter"))
+  .settings(commonSettings: _*)
+  .dependsOn(kernel)
+  .settings(
+    libraryDependencies += "log4j"             % "log4j"           % "1.2.17",
+    libraryDependencies += "com.typesafe.akka" %% "akka-actor"     % "2.5.3",
+    libraryDependencies += "org.reactivemongo" %% "reactivemongo"  % "0.11.14",
+    libraryDependencies += "io.spray"          % "spray-json_2.11" % "1.3.3"
+  )
 
 lazy val kernel = (project in file("kernel"))
   .settings(commonSettings: _*)
