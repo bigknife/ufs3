@@ -28,29 +28,28 @@ sealed trait Backup[F[_]] {
 }
 object Backup {
   sealed trait Op[A]
-  case object Open            extends Op[Unit]
-  case object Close           extends Op[Unit]
+  case object Open                  extends Op[Unit]
+  case object Close                 extends Op[Unit]
   case class Send(data: ByteBuffer) extends Op[Unit]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Backup[F] {
-    override def open(): Par[F, Unit]           = liftPar_T[Op, F, Unit](Open)
-    override def close(): Par[F, Unit]          = liftPar_T[Op, F, Unit](Close)
+    override def open(): Par[F, Unit]                 = liftPar_T[Op, F, Unit](Open)
+    override def close(): Par[F, Unit]                = liftPar_T[Op, F, Unit](Close)
     override def send(data: ByteBuffer): Par[F, Unit] = liftPar_T[Op, F, Unit](Send(data))
   }
 
-  implicit def to[F[_]](implicit I: Inject[Op, F]) = new To[F]
-  def apply[F[_]](implicit B: Backup[F]): Backup[F]    = B
+  implicit def to[F[_]](implicit I: Inject[Op, F])  = new To[F]
+  def apply[F[_]](implicit B: Backup[F]): Backup[F] = B
 
   trait Handler[M[_]] extends NT[Op, M] {
-    protected[this] def open(): M[Unit]
-    protected[this] def close(): M[Unit]
-    protected[this] def send(data: ByteBuffer): M[Unit]
+    def open(): M[Unit]
+    def close(): M[Unit]
+    def send(data: ByteBuffer): M[Unit]
 
     override def apply[A](fa: Op[A]): M[A] = fa match {
-      case Open ⇒ open()
-      case Close ⇒ close()
+      case Open       ⇒ open()
+      case Close      ⇒ close()
       case Send(data) ⇒ send(data)
     }
   }
 }
-

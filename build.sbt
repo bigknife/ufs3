@@ -1,7 +1,6 @@
 import sbt.Keys._
 import coursier._
 
-
 //moodify your orgnization and version
 lazy val commonSettings = Seq(
   scalaVersion in ThisBuild := "2.11.8",
@@ -36,3 +35,13 @@ lazy val kernel = (project in file("kernel"))
 lazy val core = (project in file("core"))
   .dependsOn(kernel)
   .settings(commonSettings: _*)
+
+lazy val interpreter = (project in file("interpreter"))
+  .dependsOn(core)
+  .settings(commonSettings: _*)
+  .settings(
+    resolvers += "BarcsysRepo" at "https://repox.barcsys.com/",
+    libraryDependencies += "com.barcsys" %% "barcsys_tcp_connection" % "1.0.10",
+    libraryDependencies += "org.scalactic" %% "scalactic"   % "3.0.1",
+    libraryDependencies += "org.scalatest" %% "scalatest"   % "3.0.1" % "test"
+  )
