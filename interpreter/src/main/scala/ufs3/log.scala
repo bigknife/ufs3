@@ -15,7 +15,7 @@ trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, Unit]] {
   private lazy val logger: Logger = Logger.getLogger(getClass.getName)
 
   override def debug(msg: String, cause: Option[Throwable]): Kleisli[IO, Unit, Unit] = Kleisli { _ ⇒
-    IO.pure {
+    IO {
       cause match {
         case Some(t) ⇒ logger.debug(msg, t)
         case None    ⇒ logger.debug(msg)
@@ -24,7 +24,7 @@ trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, Unit]] {
   }
 
   override def info(msg: String, cause: Option[Throwable]): Kleisli[IO, Unit, Unit] = Kleisli { _ ⇒
-    IO.pure {
+    IO {
       cause match {
         case Some(t) ⇒ logger.info(msg, t)
         case None    ⇒ logger.info(msg)
@@ -33,7 +33,7 @@ trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, Unit]] {
   }
 
   override def warn(msg: String, cause: Option[Throwable]): Kleisli[IO, Unit, Unit] = Kleisli { _ ⇒
-    IO.pure {
+    IO {
       cause match {
         case Some(t) ⇒ logger.warn(msg, t)
         case None    ⇒ logger.warn(msg)
@@ -42,7 +42,7 @@ trait LogInterpreter extends Log.Handler[Kleisli[IO, Unit, Unit]] {
   }
 
   override def error(msg: String, cause: Option[Throwable]): Kleisli[IO, Unit, Unit] = Kleisli { _ ⇒
-    IO.pure {
+    IO {
       cause match {
         case Some(t) ⇒ logger.error(msg, t)
         case None    ⇒ logger.error(msg)
