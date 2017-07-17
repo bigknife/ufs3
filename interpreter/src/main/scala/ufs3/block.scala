@@ -84,3 +84,7 @@ trait BlockInterpreter extends Block.Handler[Kleisli[IO, Unit, ?]] {
     IO.pure(new File(path.file.value.getPath).exists())
   }
 }
+
+object BlockInterpreter {
+  def apply(): BlockInterpreter = new BlockInterpreter {}
+}
