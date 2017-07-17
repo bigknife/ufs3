@@ -21,19 +21,19 @@ import sop._
 trait SandwichIn[F[_], In] {
   def head(key: String, bodyLength: Long): Par[F, ByteBuffer]
   def nextBody(in: In): Par[F, Option[ByteBuffer]]
-  def tail(): Par[F, ByteBuffer]
+  def tail(hash: String): Par[F, ByteBuffer]
 }
 object SandwichIn {
   trait Op[In, A]
   final case class Head[In](key: String, bodyLength: Long) extends Op[In, ByteBuffer]
   final case class NextBody[In](in: In)                    extends Op[In, Option[ByteBuffer]]
-  final case class Tail[In]()                              extends Op[In, ByteBuffer]
+  final case class Tail[In](hash: String)                  extends Op[In, ByteBuffer]
 
   class To[F[_], In](implicit IJ: Inject[Op[In, ?], F]) extends SandwichIn[F, In] {
     def nextBody(in: In): Par[F, Option[ByteBuffer]] = liftPar_T[Op[In, ?], F, Option[ByteBuffer]](NextBody[In](in))
     def head(key: String, bodyLength: Long): Par[F, ByteBuffer] =
       liftPar_T[Op[In, ?], F, ByteBuffer](Head[In](key, bodyLength))
-    def tail(): Par[F, ByteBuffer] = liftPar_T[Op[In, ?], F, ByteBuffer](Tail[In]())
+    def tail(hash: String): Par[F, ByteBuffer] = liftPar_T[Op[In, ?], F, ByteBuffer](Tail[In](hash))
   }
 
   implicit def to[F[_], In](implicit IJ: Inject[Op[In, ?], F]): SandwichIn[F, In] = new To[F, In]
@@ -43,31 +43,31 @@ object SandwichIn {
   trait Handler[M[_], In] extends NT[Op[In, ?], M] {
     def head(key: String, bodyLength: Long): M[ByteBuffer]
     def nextBody(in: In): M[Option[ByteBuffer]]
-    def tail(): M[ByteBuffer]
+    def tail(hash: String): M[ByteBuffer]
 
     def apply[A](fa: Op[In, A]): M[A] = fa match {
       case Head(key, bodyLength) ⇒ head(key, bodyLength)
       case NextBody(in)          ⇒ nextBody(in)
-      case Tail()                ⇒ tail()
+      case Tail(hash: String)    ⇒ tail(hash)
     }
   }
 }
 
 trait SandwichOut[F[_], Out] {
-  def head(bb: ByteBuffer): Par[F, Unit]
+  def head(bb: ByteBuffer, out: Out): Par[F, Unit]
   def outputBody(body: ByteBuffer, out: Out): Par[F, Unit]
-  def tail(bb: ByteBuffer): Par[F, Unit]
+  def tail(bb: ByteBuffer, out: Out): Par[F, Unit]
 }
 object SandwichOut {
   sealed trait Op[Out, A]
-  final case class Head[Out](bb: ByteBuffer)                   extends Op[Out, Unit]
+  final case class Head[Out](bb: ByteBuffer, out: Out)         extends Op[Out, Unit]
   final case class OutputBody[Out](body: ByteBuffer, out: Out) extends Op[Out, Unit]
-  final case class Tail[Out](bb: ByteBuffer)                   extends Op[Out, Unit]
+  final case class Tail[Out](bb: ByteBuffer, out: Out)         extends Op[Out, Unit]
 
   class To[F[_], Out](implicit I: Inject[Op[Out, ?], F]) extends SandwichOut[F, Out] {
-    def head(bb: ByteBuffer): Par[F, Unit]                   = liftPar_T[Op[Out, ?], F, Unit](Head(bb))
+    def head(bb: ByteBuffer, out: Out): Par[F, Unit]         = liftPar_T[Op[Out, ?], F, Unit](Head(bb, out))
     def outputBody(body: ByteBuffer, out: Out): Par[F, Unit] = liftPar_T[Op[Out, ?], F, Unit](OutputBody(body, out))
-    def tail(bb: ByteBuffer): Par[F, Unit]                   = liftPar_T[Op[Out, ?], F, Unit](Tail(bb))
+    def tail(bb: ByteBuffer, out: Out): Par[F, Unit]         = liftPar_T[Op[Out, ?], F, Unit](Tail(bb, out))
   }
 
   implicit def to[F[_], Out](implicit I: Inject[Op[Out, ?], F]): SandwichOut[F, Out] = new To[F, Out]
@@ -75,14 +75,14 @@ object SandwichOut {
   def apply[F[_], Out](implicit S: SandwichOut[F, Out]): SandwichOut[F, Out] = S
 
   trait Handler[M[_], Out] extends NT[Op[Out, ?], M] {
-    def head(bb: ByteBuffer): M[Unit]
+    def head(bb: ByteBuffer, out: Out): M[Unit]
     def outputBody(body: ByteBuffer, out: Out): M[Unit]
-    def tail(bb: ByteBuffer): M[Unit]
+    def tail(bb: ByteBuffer, out: Out): M[Unit]
 
     def apply[A](fa: Op[Out, A]): M[A] = fa match {
-      case Head(bb)              ⇒ head(bb)
+      case Head(bb, out)         ⇒ head(bb, out)
       case OutputBody(body, out) ⇒ outputBody(body, out)
-      case Tail(bb)              ⇒ tail(bb)
+      case Tail(bb, out)         ⇒ tail(bb, out)
     }
   }
 }
