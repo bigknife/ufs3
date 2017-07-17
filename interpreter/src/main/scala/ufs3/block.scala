@@ -15,7 +15,7 @@ import ufs3.kernel.block.Block.{BlockFile, FileMode}
 /**
   * Created by songwenchao on 2017/7/17.
   */
-object BlockInterpreter extends Block.Handler[Kleisli[IO, Unit, ?]] {
+trait BlockInterpreter extends Block.Handler[Kleisli[IO, Unit, ?]] {
 
   private[this] lazy val lockMap = new ConcurrentHashMap[BlockFile, FileLock]
 
