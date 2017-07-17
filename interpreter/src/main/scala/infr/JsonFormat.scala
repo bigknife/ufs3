@@ -1,4 +1,4 @@
-package audit.infr
+package infr
 
 import spray.json.{DefaultJsonProtocol, JsNumber, JsObject, JsString, JsValue, RootJsonFormat}
 import ufs3.kernel.audit.Audit.AuditInfo

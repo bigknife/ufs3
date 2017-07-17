@@ -1,6 +1,6 @@
 package audit
 
-import audit.infr.{JsonFormat, RMSupport}
+import infr.{JsonFormat, RMSupport}
 import ufs3.kernel.audit.Audit
 import ufs3.kernel.audit.Audit.AuditInfo
 

@@ -1,20 +1,9 @@
-package audit.infr
+package infr
 
 import reactivemongo.api.BSONSerializationPack.{Reader, Writer}
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.{MongoConnection, MongoDriver, QueryOpts}
-import reactivemongo.bson.{
-  BSONArray,
-  BSONBoolean,
-  BSONDocument,
-  BSONDouble,
-  BSONInteger,
-  BSONLong,
-  BSONNull,
-  BSONObjectID,
-  BSONString,
-  BSONValue
-}
+import reactivemongo.bson.{BSONArray, BSONBoolean, BSONDocument, BSONDouble, BSONInteger, BSONLong, BSONNull, BSONObjectID, BSONString, BSONValue}
 import spray.json.{JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsValue}
 
 import scala.concurrent.ExecutionContext.Implicits.global
