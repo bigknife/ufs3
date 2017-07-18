@@ -90,14 +90,15 @@ package object core {
   // 2. travese sandwich body and write them
   // 3. write sandwich tail
   // Done: no index, no backup, no lock will be fixed at #17: add backup logic to core dsl
-  def write[F[_], IN](key: String, length: Long, in: IN, out: UFS3)(implicit B: Block[F],
-                                                      F: Filler[F],
-                                                      BAK: Backup[F],
-                                                      FI: Fildex[F],
-                                                      S: SandwichIn[F, IN]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
+  def write[F[_], IN](key: String, length: Long, in: IN, out: UFS3)(
+      implicit B: Block[F],
+      F: Filler[F],
+      BAK: Backup[F],
+      FI: Fildex[F],
+      S: SandwichIn[F, IN]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
     Kleisli { coreConfig ⇒
       val prog: Id[SOP[F, Unit]] = for {
-        startPos ← F.allocate(out.fillerFile)
+        startPos ← F.startAppend(out.fillerFile)
         _        ← B.seek(out.blockFile, startPos)
         headB    ← S.head(key, length)
         _        ← B.write(out.blockFile, headB)
@@ -111,11 +112,12 @@ package object core {
             } yield nextLength + obb.map(_.array().length).getOrElse(0)
           writeBody()
         }
-      //TODO calcute the md5
+        //TODO calcute the md5
         tailB ← S.tail("md5")
         _     ← B.write(out.blockFile, tailB)
         _     ← BAK.send(tailB)
         _     ← FI.append(out.fildexFile, Idx(key, startPos, headB.array().length + bodyLength + tailB.array().length))
+        _     ← F.endAppend(out.fillerFile, startPos + headB.array().length + bodyLength + tailB.array().length)
       } yield ()
       prog
     }

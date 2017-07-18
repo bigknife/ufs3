@@ -96,8 +96,8 @@ object Fildex {
       override def close(): Unit = underlying.close()
     }
 
-    def apply(hostFiller: FillerFile): Eval[FildexFile] =
-      Eval.later(new RandomAccessFildexFile(new RandomAccessFile(s"${hostFiller.path}.index", "rw"), hostFiller))
+    def apply(hostFiller: FillerFile): Eval[FildexFile] = ???
+    //Eval.later(new RandomAccessFildexFile(new RandomAccessFile(s"${hostFiller.path}.index", "rw"), hostFiller))
   }
 
   trait Data
