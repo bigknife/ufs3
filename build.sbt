@@ -40,10 +40,10 @@ lazy val interpreter = (project in file("interpreter"))
   .settings(commonSettings: _*)
   .settings(
     resolvers += "BarcsysRepo" at "https://repox.barcsys.com/",
-    libraryDependencies += "log4j"             % "log4j"           % "1.2.17",
-    libraryDependencies += "org.reactivemongo" %% "reactivemongo"  % "0.11.14",
-    libraryDependencies += "io.spray"          % "spray-json_2.11" % "1.3.3",
-    libraryDependencies += "com.barcsys" %% "barcsys_tcp_connection" % "1.0.10",
-    libraryDependencies += "org.scalactic" %% "scalactic"   % "3.0.1",
-    libraryDependencies += "org.scalatest" %% "scalatest"   % "3.0.1" % "test"
+    libraryDependencies += "log4j"             % "log4j"                   % "1.2.17",
+    libraryDependencies += "org.reactivemongo" %% "reactivemongo"          % "0.11.14",
+    libraryDependencies += "io.spray"          % "spray-json_2.11"         % "1.3.3",
+    libraryDependencies += "com.barcsys"       %% "barcsys_tcp_connection" % "1.0.10",
+    libraryDependencies += "org.scalactic"     %% "scalactic"              % "3.0.1",
+    libraryDependencies += "org.scalatest"     %% "scalatest"              % "3.0.1" % "test"
   )

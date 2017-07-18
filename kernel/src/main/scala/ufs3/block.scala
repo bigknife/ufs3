@@ -117,8 +117,12 @@ object Block {
     * The file wrapper, we can get a file from a Path.
     */
   import java.io.File
-  sealed trait Path {
+  sealed trait Path {outter ⇒
     def file: Eval[File]
+
+    def indexPath: Path = new Path {
+      def file: Eval[File] =  outter.file.map(f ⇒ new File(f.getAbsolutePath + ".idx"))
+    }
   }
   object Path {
     def apply(p: String): Path = new Path {

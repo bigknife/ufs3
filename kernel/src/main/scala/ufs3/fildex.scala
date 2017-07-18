@@ -16,16 +16,17 @@ import java.nio.channels.FileChannel
 import cats.Eval
 import cats.free.Inject
 import sop._
-import ufs3.kernel.filler.Filler.FillerFile
+import ufs3.kernel.block._
+import Block._
 
 import scala.language.{higherKinds, implicitConversions}
 
 trait Fildex[F[_]] {
   import Fildex._
 
-  def check(ff: FillerFile): Par[F, FildexFile]
-  def repair(ff: FillerFile): Par[F, Unit]
-  def create(ff: FillerFile): Par[F, FildexFile]
+  def init(ff: BlockFile): Par[F, FildexFile]
+  def check(ff: BlockFile): Par[F, FildexFile]
+  def repair(ff: BlockFile): Par[F, Unit]
   def append(ff: FildexFile, idx: Idx): Par[F, Unit]
   def close(ff: FildexFile): Par[F, Unit]
   def fetch(key: String): Par[F, Option[Idx]]
@@ -33,18 +34,18 @@ trait Fildex[F[_]] {
 
 object Fildex {
   sealed trait Op[A]
-  final case class Check(ff: FillerFile)  extends Op[FildexFile]
-  final case class Repair(ff: FillerFile) extends Op[Unit]
-  final case class Create(ff: FillerFile) extends Op[FildexFile]
+  final case class Check(ff: BlockFile)  extends Op[FildexFile]
+  final case class Repair(ff: BlockFile) extends Op[Unit]
+  final case class Init(ff: BlockFile) extends Op[FildexFile]
   final case class Close(ff: FildexFile)  extends Op[Unit]
   final case class Fetch(key: String)     extends Op[Option[Idx]]
 
   final case class Append(ff: FildexFile, idx: Idx) extends Op[Unit]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Fildex[F] {
-    def check(ff: FillerFile): Par[F, FildexFile]      = liftPar_T[Op, F, FildexFile](Check(ff))
-    def repair(ff: FillerFile): Par[F, Unit]           = liftPar_T[Op, F, Unit](Repair(ff))
-    def create(ff: FillerFile): Par[F, FildexFile]     = liftPar_T[Op, F, FildexFile](Create(ff))
+    def check(ff: BlockFile): Par[F, FildexFile]      = liftPar_T[Op, F, FildexFile](Check(ff))
+    def repair(ff: BlockFile): Par[F, Unit]           = liftPar_T[Op, F, Unit](Repair(ff))
+    def init(ff: BlockFile): Par[F, FildexFile]     = liftPar_T[Op, F, FildexFile](Init(ff))
     def close(ff: FildexFile): Par[F, Unit]            = liftPar_T[Op, F, Unit](Close(ff))
     def fetch(key: String): Par[F, Option[Idx]]        = liftPar_T[Op, F, Option[Idx]](Fetch(key))
     def append(ff: FildexFile, idx: Idx): Par[F, Unit] = liftPar_T[Op, F, Unit](Append(ff, idx))
@@ -55,9 +56,9 @@ object Fildex {
 
   trait Handler[M[_]] extends NT[Op, M] {
 
-    def check(ff: FillerFile): M[FildexFile]
-    def repair(ff: FillerFile): M[Unit]
-    def create(ff: FillerFile): M[FildexFile]
+    def check(ff: BlockFile): M[FildexFile]
+    def repair(ff: BlockFile): M[Unit]
+    def init(ff: BlockFile): M[FildexFile]
     def append(ff: FildexFile, idx: Idx): M[Unit]
     def close(ff: FildexFile): M[Unit]
     def fetch(key: String): M[Option[Idx]]
@@ -65,7 +66,7 @@ object Fildex {
     def apply[A](fa: Op[A]): M[A] = fa match {
       case Check(ff)       ⇒ check(ff)
       case Repair(ff)      ⇒ repair(ff)
-      case Create(ff)      ⇒ create(ff)
+      case Init(ff)      ⇒ init(ff)
       case Close(ff)       ⇒ close(ff)
       case Append(ff, idx) ⇒ append(ff, idx)
       case Fetch(key)      ⇒ fetch(key)
@@ -73,7 +74,7 @@ object Fildex {
   }
 
   trait FildexFile {
-    def hostFiller: FillerFile
+    def hostFiller: BlockFile
     def writeData(data: ByteBuffer, size: Long): Unit
     def seekToTail(): Unit
     def close(): Unit
@@ -81,9 +82,9 @@ object Fildex {
   }
   object FildexFile {
     private[this] final class RandomAccessFildexFile(private val underlying: RandomAccessFile,
-                                                     private val host: FillerFile)
+                                                     private val host: BlockFile)
         extends FildexFile {
-      override def hostFiller: FillerFile = host
+      override def hostFiller: BlockFile = host
 
       override def writeData(data: ByteBuffer, size: Long): Unit = {
         val channel = underlying.getChannel
@@ -96,7 +97,7 @@ object Fildex {
       override def close(): Unit = underlying.close()
     }
 
-    def apply(hostFiller: FillerFile): Eval[FildexFile] = ???
+    def apply(hostFiller: BlockFile): Eval[FildexFile] = ???
     //Eval.later(new RandomAccessFildexFile(new RandomAccessFile(s"${hostFiller.path}.index", "rw"), hostFiller))
   }
 

@@ -43,8 +43,9 @@ package object core {
 
   // core config
   trait CoreConfig {
-    def blockPath: Block.Path
-    def blockSize: Block.Size
+    def fillerBlockPath: Block.Path
+    def fillerBlockSize: Block.Size
+    def idxBlockSize: Block.Size
   }
 
   // startup ufs3
@@ -54,16 +55,18 @@ package object core {
   // 4. ok.
   def startup[F[_]](implicit B: Block[F], F: Filler[F], FI: Fildex[F]): Kleisli[Id, CoreConfig, SOP[F, UFS3]] =
     Kleisli { coreConfig ⇒
-      val path = coreConfig.blockPath
-      val mode = Block.FileMode.ReadWrite
-      val size = coreConfig.blockSize
+      val path    = coreConfig.fillerBlockPath
+      val mode    = Block.FileMode.ReadWrite
+      val size    = coreConfig.fillerBlockSize
+      val idxSize = coreConfig.idxBlockSize
       val prog: Id[SOP[F, UFS3]] = for {
         being      ← B.existed(path)
-        blockFile  ← if (being) B.open(path, mode) else B.create(path, size)
-        fillerFile ← if (being) F.check(blockFile) else F.check(blockFile)
-        fildexFile ← if (being) FI.check(fillerFile) else FI.create(fillerFile)
-        _          ← B.lock(blockFile) // lock when startup
-      } yield UFS3(blockFile, fillerFile, fildexFile)
+        bfFiller   ← if (being) B.open(path, mode) else B.create(path, size)
+        bfFildex   ← if (being) B.open(path.indexPath, mode) else B.create(path.indexPath, idxSize)
+        fillerFile ← if (being) F.check(bfFiller) else F.init(bfFiller)
+        fildexFile ← if (being) FI.check(bfFildex) else FI.init(bfFildex)
+        _          ← B.lock(bfFiller) // lock when startup
+      } yield UFS3(bfFiller, fillerFile, fildexFile)
       prog
     }
 
