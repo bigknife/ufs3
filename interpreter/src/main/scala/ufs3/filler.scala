@@ -46,7 +46,7 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
 
   def check(blockFile: Block.BlockFile): Kleisli[IO, FillerInterpreter.Config, Filler.FillerFile] = Kleisli { config ⇒
     IO {
-      // if first 4bytes is the magic
+      // TODO re-think check logic
       import RandomAccessBlockFile._
       if (blockFile.size() < RandomFillerFile.HEAD_SIZE) throw new IllegalAccessException("the block file is not a FillerFile")
 
