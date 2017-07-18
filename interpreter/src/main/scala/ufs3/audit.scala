@@ -13,30 +13,23 @@ import ufs3.kernel.audit.Audit
   */
 trait AuditInterpreter extends Audit.Handler[Kleisli[IO, Config, ?]] with RMSupport {
   override def begin(auditInfo: Audit.BeginAudit): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
-    IO {
-      import spray.json._
-      implicit val auditJsonFormat = JsonFormat.BeginAuditFormat
-      insertInto(config.collectionName, auditInfo.toJson)
-        .local[Config](config ⇒ RMSupport.config(config.mongoUri))
-    }
+    import spray.json._
+    implicit val auditJsonFormat = JsonFormat.BeginAuditFormat
+    insertInto(config.collectionName, auditInfo.toJson).run(RMSupport.config(config.mongoUri))
   }
 
   override def process(auditInfo: Audit.ProcessAudit): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
-    IO {
-      import spray.json._
-      implicit val auditJsonFormat = JsonFormat.ProcessAuditFormat
-      insertInto(config.collectionName, auditInfo.toJson)
-        .local[Config](config ⇒ RMSupport.config(config.mongoUri))
-    }
+    import spray.json._
+    implicit val auditJsonFormat = JsonFormat.ProcessAuditFormat
+    insertInto(config.collectionName, auditInfo.toJson)
+      .run(RMSupport.config(config.mongoUri))
   }
 
   override def end(auditInfo: Audit.EndAudit): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
-    IO {
-      import spray.json._
-      implicit val auditJsonFormat = JsonFormat.EndAuditFormat
-      insertInto(config.collectionName, auditInfo.toJson)
-        .local[Config](config ⇒ RMSupport.config(config.mongoUri))
-    }
+    import spray.json._
+    implicit val auditJsonFormat = JsonFormat.EndAuditFormat
+    insertInto(config.collectionName, auditInfo.toJson)
+      .run(RMSupport.config(config.mongoUri))
   }
 }
 
