@@ -35,6 +35,7 @@ private[interpreter] final class RandomAccessBlockFile(private val underlying: R
       .put(data); ()
   }
   def lock(): FileLock = underlying.getChannel.tryLock()
+  def size(): Long = underlying.length()
 
 }
 object RandomAccessBlockFile {
