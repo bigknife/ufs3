@@ -1,13 +1,29 @@
 package infr
 
+import cats.Eval
+import cats.data.Kleisli
+import cats.effect.IO
+import infr.RMSupport.Config
 import reactivemongo.api.BSONSerializationPack.{Reader, Writer}
+import reactivemongo.api.collections.BatchCommands
 import reactivemongo.api.collections.bson.BSONCollection
-import reactivemongo.api.{MongoConnection, MongoDriver, QueryOpts}
-import reactivemongo.bson.{BSONArray, BSONBoolean, BSONDocument, BSONDouble, BSONInteger, BSONLong, BSONNull, BSONObjectID, BSONString, BSONValue}
+import reactivemongo.api.{DefaultDB, MongoConnection, MongoDriver, QueryOpts}
+import reactivemongo.bson.{
+  BSONArray,
+  BSONBoolean,
+  BSONDocument,
+  BSONDouble,
+  BSONInteger,
+  BSONLong,
+  BSONNull,
+  BSONObjectID,
+  BSONString,
+  BSONValue
+}
 import spray.json.{JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsValue}
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 /**
@@ -15,87 +31,134 @@ import scala.util.{Failure, Success}
   */
 trait RMSupport {
 
-  val mongoConnUri: String
+  private def liftToKleisli[F](future: Future[F]): Kleisli[IO, Config, F] = Kleisli { _: Config ⇒
+    IO.fromFuture[F] {
+      Eval.later(future)
+    }
+  }
 
-  private[RMSupport] lazy val dbName = MongoConnection.parseURI(mongoConnUri).get.db.get
-  private[RMSupport] lazy val driver = new MongoDriver
-  private[RMSupport] lazy val connection: Future[MongoConnection] =
-    Future.fromTry(MongoConnection.parseURI(mongoConnUri).map(driver.connection))
+  private def databaseName: Kleisli[IO, Config, String] = Kleisli { config ⇒
+    IO.fromFuture[String] {
+      Eval.later {
+        Future {
+          MongoConnection.parseURI(config.mongoUri).get.db.get
+        }
+      }
+    }
+  }
 
-  def collection(name: String): Future[BSONCollection] =
+  private def dbConnection: Kleisli[IO, Config, MongoConnection] = Kleisli { config =>
+    IO.fromFuture[MongoConnection] {
+      Eval.later {
+        lazy val driver = new MongoDriver
+        Future.fromTry(MongoConnection.parseURI(config.mongoUri)).map(driver.connection)
+      }
+    }
+  }
+
+  private def collection(name: String): Kleisli[IO, Config, BSONCollection] = {
     for {
-      conn ← connection
-      db   ← conn.database(dbName)
+      dbName ← databaseName
+      conn   ← dbConnection
+      db     ← liftToKleisli[DefaultDB](conn.database(dbName))
     } yield db.collection(name)
+  }
 
-  def insertInto(collectionName: String, t: JsValue): Future[Unit] = {
-    implicit val jsonWriter = RMSupport.JsonWriter
+  def insertInto(collectionName: String, t: JsValue): Kleisli[IO, Config, Unit] = {
     for {
       coll ← collection(collectionName)
-      _    ← coll.insert[JsValue](t)
-    } yield ()
+      result ← liftToKleisli[Unit] {
+        implicit val jsonWriter = RMSupport.JsonWriter
+        coll.insert[JsValue](t).map(_ ⇒ ())
+      }
+    } yield result
   }
 
   def find(collectionName: String,
            condition: BSONDocument,
            order: Option[BSONDocument] = None,
            from: Int = 0,
-           to: Int = Int.MaxValue): Future[Vector[JsValue]] = {
-    implicit val jsonReader = RMSupport.JsonReader
+           to: Int = Int.MaxValue): Kleisli[IO, Config, Vector[JsValue]] = {
     for {
       coll ← collection(collectionName)
-      vector ← if (order.isDefined) {
-        coll
-          .find(condition)
-          .options(QueryOpts().skip(from).batchSize(to - from))
-          .sort(order.get)
-          .cursor[JsValue]()
-          .collect[Vector](to - from)
-      } else
-        coll
-          .find(condition)
-          .options(QueryOpts().skip(from).batchSize(to - from))
-          .cursor[JsValue]()
-          .collect[Vector](to - from)
-    } yield vector
-  }
-
-  def delete(collectionName: String, condition: BSONDocument): Future[Unit] =
-    for {
-      coll ← collection(collectionName)
-      _    ← coll.remove(condition)
-    } yield ()
-
-  def fau(collectionName: String, condition: BSONDocument, t: JsValue, upsert: Boolean = false): Future[JsValue] = {
-    implicit val jsonReader = RMSupport.JsonReader
-    implicit val jsonWriter = RMSupport.JsonWriter
-    for {
-      coll ← collection(collectionName)
-      rt ← coll.findAndUpdate[BSONDocument, BSONDocument](
-        selector = condition,
-        update = BSONDocument("$set" → jsonWriter.write(t)),
-        fetchNewObject = true,
-        upsert = upsert
-      )
       result ← {
-        rt.result[JsValue] match {
-          case Some(value) ⇒ Future.successful(value)
-          case None ⇒
-            Future.failed(
-              new IllegalArgumentException(s"nothing found and update $collectionName for condition: $condition"))
+        if (order.isDefined) {
+          liftToKleisli[Vector[JsValue]] {
+            implicit val jsonReader = RMSupport.JsonReader
+            coll
+              .find(condition)
+              .options(QueryOpts().skip(from).batchSize(to - from))
+              .sort(order.get)
+              .cursor[JsValue]()
+              .collect[Vector](to - from)
+          }
+        } else {
+          liftToKleisli[Vector[JsValue]] {
+            implicit val jsonReader = RMSupport.JsonReader
+            coll
+              .find(condition)
+              .options(QueryOpts().skip(from).batchSize(to - from))
+              .cursor[JsValue]()
+              .collect[Vector](to - from)
+          }
         }
       }
     } yield result
   }
 
-  def countBy(collectionName: String, condition: BSONDocument): Future[Int] =
+  def delete(collectionName: String, condition: BSONDocument): Kleisli[IO, Config, Unit] = {
     for {
-      coll  ← collection(collectionName)
-      count ← coll.count(Some(condition))
-    } yield count
+      coll   ← collection(collectionName)
+      result ← liftToKleisli[Unit](coll.remove(condition).map(_ ⇒ ()))
+    } yield result
+  }
+
+  def fau(collectionName: String,
+          condition: BSONDocument,
+          t: JsValue,
+          upsert: Boolean = false): Kleisli[IO, Config, JsValue] = {
+    for {
+      coll ← collection(collectionName)
+      rt ← liftToKleisli {
+        implicit val jsonWriter = RMSupport.JsonWriter
+        coll.findAndUpdate[BSONDocument, BSONDocument](
+          selector = condition,
+          update = BSONDocument("$set" → jsonWriter.write(t)),
+          fetchNewObject = true,
+          upsert = upsert
+        )
+      }
+    } yield {
+      implicit val jsonReader = RMSupport.JsonReader
+      rt.result[JsValue] match {
+        case Some(value) ⇒ value
+        case None ⇒
+          new IllegalArgumentException(s"nothing found and update $collectionName for condition: $condition")
+          JsNull
+      }
+    }
+  }
+
+  def countBy(collectionName: String, condition: BSONDocument): Kleisli[IO, Config, Int] = {
+    for {
+      coll   ← collection(collectionName)
+      result ← liftToKleisli(coll.count(Some(condition)))
+    } yield result
+  }
+
 }
 
 object RMSupport {
+  trait Config {
+    def mongoUri: String
+    implicit def ec: ExecutionContext = scala.concurrent.ExecutionContext.Implicits.global
+  }
+
+  def config(connUri: String): Config = new Config {
+    override def mongoUri: String = connUri
+  }
+
+  def apply(): RMSupport = new RMSupport {}
 
   implicit object JsonReader extends Reader[JsValue] {
 
@@ -179,5 +242,4 @@ object RMSupport {
       case _ ⇒ throw new IllegalArgumentException("only json object can be written as a bson value")
     }
   }
-
 }

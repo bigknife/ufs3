@@ -8,6 +8,7 @@ import cats.data.Kleisli
 import cats.effect.IO
 import infr.{JsonFormat, RMSupport}
 import ufs3.audit.interprer.AuditInterpreter.Config
+import ufs3.interpreter.util.AtomicMap
 import ufs3.kernel.audit.Audit
 
 import scala.concurrent.ExecutionContext
@@ -17,34 +18,52 @@ import scala.concurrent.ExecutionContext
   */
 trait AuditInterpreter extends Audit.Handler[Kleisli[IO, Config, ?]] {
   import spray.json._
-  private lazy val uriRef = new AtomicReference[String]
-  private lazy val rmSupport = new RMSupport {
-    override val mongoConnUri: String = uriRef.get()
-  }
+  private lazy val atomicMap = AtomicMap[String, RMSupport]
   override def begin(auditInfo: Audit.BeginAudit): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
-    import rmSupport._
-    uriRef.set(config.mongoUri)
     IO {
+      val rmSupport = atomicMap(config.mongoUri) match {
+        case Some(x) ⇒ x
+        case None ⇒
+          val newSupport = RMSupport()
+          atomicMap += (config.mongoUri, newSupport)
+          newSupport
+      }
       implicit val auditJsonFormat = JsonFormat.BeginAuditFormat
-      insertInto(config.collectionName, auditInfo.toJson)
+      rmSupport
+        .insertInto(config.collectionName, auditInfo.toJson)
+        .local[Config](config ⇒ RMSupport.config(config.mongoUri))
     }
   }
 
   override def process(auditInfo: Audit.ProcessAudit): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
-    import rmSupport._
-    uriRef.set(config.mongoUri)
     IO {
+      val rmSupport = atomicMap(config.mongoUri) match {
+        case Some(x) ⇒ x
+        case None ⇒
+          val newSupport = RMSupport()
+          atomicMap += (config.mongoUri, newSupport)
+          newSupport
+      }
       implicit val auditJsonFormat = JsonFormat.ProcessAuditFormat
-      insertInto(config.collectionName, auditInfo.toJson)
+      rmSupport
+        .insertInto(config.collectionName, auditInfo.toJson)
+        .local[Config](config ⇒ RMSupport.config(config.mongoUri))
     }
   }
 
   override def end(auditInfo: Audit.EndAudit): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
-    import rmSupport._
-    uriRef.set(config.mongoUri)
     IO {
+      val rmSupport = atomicMap(config.mongoUri) match {
+        case Some(x) ⇒ x
+        case None ⇒
+          val newSupport = RMSupport()
+          atomicMap += (config.mongoUri, newSupport)
+          newSupport
+      }
       implicit val auditJsonFormat = JsonFormat.EndAuditFormat
-      insertInto(config.collectionName, auditInfo.toJson)
+      rmSupport
+        .insertInto(config.collectionName, auditInfo.toJson)
+        .local[Config](config ⇒ RMSupport.config(config.mongoUri))
     }
   }
 }
