@@ -57,12 +57,7 @@ object Filler {
     }
   }
 
-  sealed trait FillerFile {
+  private[ufs3] trait FillerFile {
     def path: String
-  }
-  object FillerFile {
-    def apply(): FillerFile = new FillerFile() {
-      override def path: String = ???
-    }
   }
 }
