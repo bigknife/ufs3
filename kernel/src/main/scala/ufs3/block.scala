@@ -10,7 +10,7 @@ package kernel
 package block
 
 import java.nio.ByteBuffer
-import java.nio.channels.{FileChannel, FileLock}
+import java.nio.channels.FileLock
 
 import scala.language.higherKinds
 import scala.language.implicitConversions
@@ -101,36 +101,14 @@ object Block {
     * ---------
     * XFS-friendly big size file
     */
-  sealed trait BlockFile {
+  private[ufs3] trait BlockFile {
+    /*
     def close(): Unit
     def seek(pos: Long): Unit
     def read(size: Long): ByteBuffer
     def write(data: ByteBuffer, size: Long): Unit
     def lock(): FileLock
-  }
-  object BlockFile {
-    import java.io.RandomAccessFile
-    private[this] final class RandomAccessBlockFile(private val underlying: RandomAccessFile) extends BlockFile {
-      override def close(): Unit         = underlying.close()
-      override def seek(pos: Long): Unit = underlying.seek(pos)
-      override def read(size: Long): ByteBuffer =
-        underlying.getChannel.map(FileChannel.MapMode.READ_ONLY, underlying.getChannel.position(), size)
-      override def write(data: ByteBuffer, size: Long): Unit = {
-        underlying.getChannel
-          .map(FileChannel.MapMode.READ_WRITE, underlying.getChannel.position(), size)
-          .put(data); ()
-      }
-      override def lock(): FileLock = underlying.getChannel.tryLock()
-
-    }
-
-    def apply(path: Path, mode: FileMode): Eval[BlockFile] = {
-      for {
-        f ← path.file
-      } yield {
-        new RandomAccessBlockFile(underlying = new RandomAccessFile(f, mode.mode))
-      }
-    }
+    */
   }
 
   /**

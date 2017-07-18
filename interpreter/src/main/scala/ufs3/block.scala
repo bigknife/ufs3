@@ -18,11 +18,13 @@ import ufs3.kernel.block.Block.{BlockFile, FileMode}
   */
 trait BlockInterpreter extends Block.Handler[Kleisli[IO, Config, ?]] {
 
+  import RandomAccessBlockFile._
+
   private[this] lazy val lockMap = new ConcurrentHashMap[BlockFile, FileLock]
 
   override protected[this] def open(path: Block.Path, mode: Block.FileMode): Kleisli[IO, Config, Block.BlockFile] =
     Kleisli { config ⇒
-      IO(BlockFile(path, mode).value)
+      IO(RandomAccessBlockFile(path, mode).value)
     }
 
   override protected[this] def close(bf: Block.BlockFile): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
@@ -36,7 +38,7 @@ trait BlockInterpreter extends Block.Handler[Kleisli[IO, Config, ?]] {
         val raf      = new RandomAccessFile(filePath, "rw")
         raf.setLength(size.sizeInByte)
         raf.close()
-        BlockFile(path, FileMode.ReadWrite).value
+        RandomAccessBlockFile(path, FileMode.ReadWrite).value
       }
     }
 
