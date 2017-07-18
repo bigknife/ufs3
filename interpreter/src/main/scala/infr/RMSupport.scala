@@ -20,6 +20,7 @@ import reactivemongo.bson.{
   BSONValue
 }
 import spray.json.{JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsValue}
+import ufs3.interpreter.util.AtomicMap
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{ExecutionContext, Future}
@@ -29,6 +30,8 @@ import scala.util.{Failure, Success}
   * Created by songwenchao on 2017/7/7.
   */
 trait RMSupport {
+
+  private val atomicMap = AtomicMap[String, MongoConnection]
 
   private def liftToKleisli[F](future: Future[F]): Kleisli[IO, Config, F] = Kleisli { _: Config ⇒
     IO.fromFuture[F] {
@@ -49,8 +52,16 @@ trait RMSupport {
   private def dbConnection: Kleisli[IO, Config, MongoConnection] = Kleisli { config =>
     IO.fromFuture[MongoConnection] {
       Eval.later {
-        lazy val driver = new MongoDriver
-        Future.fromTry(MongoConnection.parseURI(config.mongoUri)).map(driver.connection)
+        atomicMap(config.mongoUri) match {
+          case Some(conn) ⇒ Future.successful(conn)
+          case None ⇒
+            lazy val driver = new MongoDriver
+            Future.fromTry(MongoConnection.parseURI(config.mongoUri)).map { parsedUri ⇒
+              val conn = driver.connection(parsedUri)
+              atomicMap += (config.mongoUri, conn)
+              conn
+            }
+        }
       }
     }
   }
@@ -132,8 +143,7 @@ trait RMSupport {
       rt.result[JsValue] match {
         case Some(value) ⇒ value
         case None ⇒
-          new IllegalArgumentException(s"nothing found and update $collectionName for condition: $condition")
-          JsNull
+          throw new IllegalArgumentException(s"nothing found and update $collectionName for condition: $condition")
       }
     }
   }
