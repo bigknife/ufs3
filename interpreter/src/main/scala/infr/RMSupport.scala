@@ -5,7 +5,6 @@ import cats.data.Kleisli
 import cats.effect.IO
 import infr.RMSupport.Config
 import reactivemongo.api.BSONSerializationPack.{Reader, Writer}
-import reactivemongo.api.collections.BatchCommands
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.{DefaultDB, MongoConnection, MongoDriver, QueryOpts}
 import reactivemongo.bson.{
