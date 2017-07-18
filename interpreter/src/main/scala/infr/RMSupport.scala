@@ -4,9 +4,10 @@ import cats.Eval
 import cats.data.Kleisli
 import cats.effect.IO
 import infr.RMSupport.Config
+import infr.util.interpreter.FutureConverter._
 import reactivemongo.api.BSONSerializationPack.{Reader, Writer}
 import reactivemongo.api.collections.bson.BSONCollection
-import reactivemongo.api.{DefaultDB, MongoConnection, MongoDriver, QueryOpts}
+import reactivemongo.api.{MongoConnection, MongoDriver, QueryOpts}
 import reactivemongo.bson.{
   BSONArray,
   BSONBoolean,
@@ -32,12 +33,6 @@ import scala.util.{Failure, Success}
 trait RMSupport {
 
   private val atomicMap = AtomicMap[String, MongoConnection]
-
-  private def liftToKleisli[F](future: Future[F]): Kleisli[IO, Config, F] = Kleisli { _: Config ⇒
-    IO.fromFuture[F] {
-      Eval.later(future)
-    }
-  }
 
   private def databaseName: Kleisli[IO, Config, String] = Kleisli { config ⇒
     IO.fromFuture[String] {
@@ -70,14 +65,14 @@ trait RMSupport {
     for {
       dbName ← databaseName
       conn   ← dbConnection
-      db     ← liftToKleisli[DefaultDB](conn.database(dbName))
+      db     ← conn.database(dbName)
     } yield db.collection(name)
   }
 
   def insertInto(collectionName: String, t: JsValue): Kleisli[IO, Config, Unit] = {
     for {
       coll ← collection(collectionName)
-      result ← liftToKleisli[Unit] {
+      result ← {
         implicit val jsonWriter = RMSupport.JsonWriter
         coll.insert[JsValue](t).map(_ ⇒ ())
       }
@@ -93,24 +88,20 @@ trait RMSupport {
       coll ← collection(collectionName)
       result ← {
         if (order.isDefined) {
-          liftToKleisli[Vector[JsValue]] {
-            implicit val jsonReader = RMSupport.JsonReader
-            coll
-              .find(condition)
-              .options(QueryOpts().skip(from).batchSize(to - from))
-              .sort(order.get)
-              .cursor[JsValue]()
-              .collect[Vector](to - from)
-          }
+          implicit val jsonReader = RMSupport.JsonReader
+          coll
+            .find(condition)
+            .options(QueryOpts().skip(from).batchSize(to - from))
+            .sort(order.get)
+            .cursor[JsValue]()
+            .collect[Vector](to - from)
         } else {
-          liftToKleisli[Vector[JsValue]] {
-            implicit val jsonReader = RMSupport.JsonReader
-            coll
-              .find(condition)
-              .options(QueryOpts().skip(from).batchSize(to - from))
-              .cursor[JsValue]()
-              .collect[Vector](to - from)
-          }
+          implicit val jsonReader = RMSupport.JsonReader
+          coll
+            .find(condition)
+            .options(QueryOpts().skip(from).batchSize(to - from))
+            .cursor[JsValue]()
+            .collect[Vector](to - from)
         }
       }
     } yield result
@@ -119,7 +110,7 @@ trait RMSupport {
   def delete(collectionName: String, condition: BSONDocument): Kleisli[IO, Config, Unit] = {
     for {
       coll   ← collection(collectionName)
-      result ← liftToKleisli[Unit](coll.remove(condition).map(_ ⇒ ()))
+      result ← coll.remove(condition).map(_ ⇒ ())
     } yield result
   }
 
@@ -129,7 +120,7 @@ trait RMSupport {
           upsert: Boolean = false): Kleisli[IO, Config, JsValue] = {
     for {
       coll ← collection(collectionName)
-      rt ← liftToKleisli {
+      rt ← {
         implicit val jsonWriter = RMSupport.JsonWriter
         coll.findAndUpdate[BSONDocument, BSONDocument](
           selector = condition,
@@ -151,7 +142,7 @@ trait RMSupport {
   def countBy(collectionName: String, condition: BSONDocument): Kleisli[IO, Config, Int] = {
     for {
       coll   ← collection(collectionName)
-      result ← liftToKleisli(coll.count(Some(condition)))
+      result ← coll.count(Some(condition))
     } yield result
   }
 
