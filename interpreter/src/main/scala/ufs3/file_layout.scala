@@ -20,23 +20,42 @@ object Layout {
     override def toString: String = s"${len}Bytes"
   }
 
-  case class `4Bytes`(bytes: Bytes)   extends FixedLengthBytes(4)
-  case class `8Bytes`(bytes: Bytes)   extends FixedLengthBytes(8)
+  // long
+  case class `64Bytes`(bytes: Bytes)  extends FixedLengthBytes(64)
+  // int, md5...
   case class `32Bytes`(bytes: Bytes)  extends FixedLengthBytes(32)
+  // short
+  case class `16Bytes`(bytes: Bytes)  extends FixedLengthBytes(16)
+  // byte
+  case class `8Bytes`(bytes: Bytes)   extends FixedLengthBytes(8)
+
+  case class `4Bytes`(bytes: Bytes)   extends FixedLengthBytes(4)
   case class `60Bytes`(bytes: Bytes)  extends FixedLengthBytes(60)
   case class `68Bytes`(bytes: Bytes)  extends FixedLengthBytes(68)
   case class `100Bytes`(bytes: Bytes) extends FixedLengthBytes(100)
 
   def longToBytes(l: Long): Array[Byte] = {
-    val bb = ByteBuffer.allocate(4)
+    val bb = ByteBuffer.allocate(64)
     bb.putLong(l)
+    bb.array()
+  }
+  def intToBytes(i: Int): Array[Byte] = {
+    val bb = ByteBuffer.allocate(32)
+    bb.putInt(i)
+    bb.array()
+  }
+  def shortToBytes(i: Short): Array[Byte] = {
+    val bb = ByteBuffer.allocate(16)
+    bb.putShort(i)
     bb.array()
   }
 
   class Op[A](a: A)(implicit ev: A ⇒ Bytes) {
     def `4Bytes`: Layout.`4Bytes`     = Layout.`4Bytes`(ev(a))
     def `8Bytes`: Layout.`8Bytes`     = Layout.`8Bytes`(ev(a))
-    def `32Bytes`: Layout.`32Bytes`   = Layout.`32Bytes`(ev(a))
+    def `16Bytes`: Layout.`16Bytes`     = Layout.`16Bytes`(ev(a))
+    def `32Bytes`: Layout.`32Bytes`     = Layout.`32Bytes`(ev(a))
+    def `64Bytes`: Layout.`64Bytes`   = Layout.`64Bytes`(ev(a))
     def `60Bytes`: Layout.`60Bytes`   = Layout.`60Bytes`(ev(a))
     def `68Bytes`: Layout.`68Bytes`   = Layout.`68Bytes`(ev(a))
     def `100Bytes`: Layout.`100Bytes` = Layout.`100Bytes`(ev(a))
