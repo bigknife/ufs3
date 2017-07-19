@@ -63,7 +63,7 @@ trait BlockInterpreter extends Block.Handler[Kleisli[IO, Config, ?]] {
     Kleisli { config ⇒
       IO {
         val size = if (data.position() == 0) data.limit() else data.flip().limit()
-        blockFile.write(data, size.toLong)
+        blockFile.write(data, size)
       }
     }
 

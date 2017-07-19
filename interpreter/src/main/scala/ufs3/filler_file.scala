@@ -9,44 +9,50 @@ package ufs3
 package interpreter
 package filler
 
-import java.nio.ByteBuffer
-
-import ufs3.interpreter.block.RandomAccessBlockFile
-import ufs3.kernel.block.Block.BlockFile
+import ufs3.interpreter.block.{BlockFileBasedFile, RandomAccessBlockFile}
 import ufs3.kernel.filler.Filler.FillerFile
+import ufs3.interpreter.layout._
 
 import scala.language.implicitConversions
 
-final class RandomFillerFile(tailPosition: Long, private val underlying: RandomAccessBlockFile) extends FillerFile {
-  import RandomFillerFile._
+final class RandomFillerFile(private val layout: FillerFileLayout, val underlying: RandomAccessBlockFile)
+    extends FillerFile
+    with BlockFileBasedFile {
 
-  def headBytes: ByteBuffer = {
-    val bb = ByteBuffer.allocate(20)
-    bb.put(HEAD_MAGIC)
-    bb.putLong(underlying.size())
-    bb.putLong(tailPosition)
-    bb
+  def init(): RandomFillerFile = {
+    refreshHead()
+    this
   }
 
-  def tailPos: Long = tailPosition
+  // current tail position
+  def tailPos: Long = layout.tailPosition.longValue
 
-  def tailMoveTo(pos: Long): Unit = {
-    // underlying move to 12, and write pos
-    underlying.seek(12)
-    val bb = ByteBuffer.allocate(8)
-    bb.putLong(pos)
-    underlying.write(bb, 8)
+  // set current tail position
+  def tailPos(pos: Long): RandomFillerFile = {
+    import Layout._
+    val newLayout = layout.tailPosition(pos.`8Bytes`)
+    RandomFillerFile(newLayout, underlying)
   }
+
+  // refresh head in the file
+  def refreshHead(): RandomFillerFile = {
+    seek(0)
+    write(layout.head.byteBuffer)
+    this
+  }
+
+  // get current version
+  def version: Int = layout.version.intValue
+
+
 }
 
 object RandomFillerFile {
-  private val HEAD_MAGIC = "FILL".getBytes("iso8859_1")
-  val HEAD_SIZE: Long    = 20 // 4magic, + 8blocksize, + 8tailposition
 
-  def apply(tailPosition: Long, underlying: RandomAccessBlockFile): RandomFillerFile =
-    new RandomFillerFile(tailPosition, underlying)
+  def apply(layout: FillerFileLayout, underlying: RandomAccessBlockFile): RandomFillerFile =
+    new RandomFillerFile(layout, underlying)
 
-  def magicMatched(bytes: Array[Byte]): Boolean = bytes sameElements HEAD_MAGIC
+  def magicMatched(bytes: Array[Byte]): Boolean = bytes sameElements FillerFileLayout.HEAD_MAGIC
 
   implicit def from(ff: FillerFile): RandomFillerFile = ff.asInstanceOf[RandomFillerFile]
 

@@ -16,6 +16,8 @@ import java.nio.channels.FileChannel
 import cats.Eval
 import cats.free.Inject
 import sop._
+import ufs3.kernel.block._
+import Block._
 import ufs3.kernel.filler.Filler.FillerFile
 
 import scala.language.{higherKinds, implicitConversions}
@@ -23,31 +25,34 @@ import scala.language.{higherKinds, implicitConversions}
 trait Fildex[F[_]] {
   import Fildex._
 
-  def check(ff: FillerFile): Par[F, FildexFile]
-  def repair(ff: FillerFile): Par[F, Unit]
-  def create(ff: FillerFile): Par[F, FildexFile]
-  def append(ff: FildexFile, idx: Idx): Par[F, Unit]
-  def close(ff: FildexFile): Par[F, Unit]
-  def fetch(key: String): Par[F, Option[Idx]]
+  def init(bf: BlockFile): Par[F, FildexFile]
+  def check(bf: BlockFile, filler: FillerFile): Par[F, Boolean]
+  def repair(bf: BlockFile, filler: FillerFile): Par[F, FildexFile]
+  def load(bf: BlockFile): Par[F, FildexFile]
+  def append(bf: FildexFile, idx: Idx): Par[F, FildexFile]
+  def close(bf: FildexFile): Par[F, Unit]
+  def fetch(key: String, fildex: FildexFile): Par[F, Option[Idx]]
 }
 
 object Fildex {
   sealed trait Op[A]
-  final case class Check(ff: FillerFile)  extends Op[FildexFile]
-  final case class Repair(ff: FillerFile) extends Op[Unit]
-  final case class Create(ff: FillerFile) extends Op[FildexFile]
-  final case class Close(ff: FildexFile)  extends Op[Unit]
-  final case class Fetch(key: String)     extends Op[Option[Idx]]
+  final case class Init(bf: BlockFile)                       extends Op[FildexFile]
+  final case class Check(bf: BlockFile, filler: FillerFile)  extends Op[Boolean]
+  final case class Repair(bf: BlockFile, filler: FillerFile) extends Op[FildexFile]
+  final case class Load(bf: BlockFile)                       extends Op[FildexFile]
+  final case class Close(bf: FildexFile)                     extends Op[Unit]
+  final case class Fetch(key: String, fildex: FildexFile)    extends Op[Option[Idx]]
 
-  final case class Append(ff: FildexFile, idx: Idx) extends Op[Unit]
+  final case class Append(bf: FildexFile, idx: Idx) extends Op[FildexFile]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Fildex[F] {
-    def check(ff: FillerFile): Par[F, FildexFile]      = liftPar_T[Op, F, FildexFile](Check(ff))
-    def repair(ff: FillerFile): Par[F, Unit]           = liftPar_T[Op, F, Unit](Repair(ff))
-    def create(ff: FillerFile): Par[F, FildexFile]     = liftPar_T[Op, F, FildexFile](Create(ff))
-    def close(ff: FildexFile): Par[F, Unit]            = liftPar_T[Op, F, Unit](Close(ff))
-    def fetch(key: String): Par[F, Option[Idx]]        = liftPar_T[Op, F, Option[Idx]](Fetch(key))
-    def append(ff: FildexFile, idx: Idx): Par[F, Unit] = liftPar_T[Op, F, Unit](Append(ff, idx))
+    def check(bf: BlockFile, filler: FillerFile): Par[F, Boolean]     = liftPar_T[Op, F, Boolean](Check(bf, filler))
+    def repair(bf: BlockFile, filler: FillerFile): Par[F, FildexFile] = liftPar_T[Op, F, FildexFile](Repair(bf, filler))
+    def load(bf: BlockFile): Par[F, FildexFile]                       = liftPar_T[Op, F, FildexFile](Load(bf))
+    def init(bf: BlockFile): Par[F, FildexFile]                       = liftPar_T[Op, F, FildexFile](Init(bf))
+    def close(bf: FildexFile): Par[F, Unit]                           = liftPar_T[Op, F, Unit](Close(bf))
+    def fetch(key: String, fildex: FildexFile): Par[F, Option[Idx]]   = liftPar_T[Op, F, Option[Idx]](Fetch(key, fildex))
+    def append(bf: FildexFile, idx: Idx): Par[F, FildexFile]                = liftPar_T[Op, F, FildexFile](Append(bf, idx))
   }
   implicit def to[F[_]](implicit I: Inject[Op, F]): Fildex[F] = new To[F]
 
@@ -55,53 +60,41 @@ object Fildex {
 
   trait Handler[M[_]] extends NT[Op, M] {
 
-    def check(ff: FillerFile): M[FildexFile]
-    def repair(ff: FillerFile): M[Unit]
-    def create(ff: FillerFile): M[FildexFile]
-    def append(ff: FildexFile, idx: Idx): M[Unit]
-    def close(ff: FildexFile): M[Unit]
-    def fetch(key: String): M[Option[Idx]]
+    def check(bf: BlockFile, filler: FillerFile): M[Boolean]
+    def repair(bf: BlockFile, filler: FillerFile): M[FildexFile]
+    def load(bf: BlockFile): M[FildexFile]
+    def init(bf: BlockFile): M[FildexFile]
+    def append(bf: FildexFile, idx: Idx): M[FildexFile]
+    def close(bf: FildexFile): M[Unit]
+    def fetch(key: String, fildex: FildexFile): M[Option[Idx]]
 
     def apply[A](fa: Op[A]): M[A] = fa match {
-      case Check(ff)       ⇒ check(ff)
-      case Repair(ff)      ⇒ repair(ff)
-      case Create(ff)      ⇒ create(ff)
-      case Close(ff)       ⇒ close(ff)
-      case Append(ff, idx) ⇒ append(ff, idx)
-      case Fetch(key)      ⇒ fetch(key)
+      case Check(bf, filler)  ⇒ check(bf, filler)
+      case Load(bf)           ⇒ load(bf)
+      case Repair(bf, filler) ⇒ repair(bf, filler)
+      case Init(bf)           ⇒ init(bf)
+      case Close(bf)          ⇒ close(bf)
+      case Append(bf, idx)    ⇒ append(bf, idx)
+      case Fetch(key, fildex) ⇒ fetch(key, fildex)
     }
   }
 
-  trait FildexFile {
-    def hostFiller: FillerFile
-    def writeData(data: ByteBuffer, size: Long): Unit
-    def seekToTail(): Unit
-    def close(): Unit
-    protected var tailPosition: Long = 0L
-  }
-  object FildexFile {
-    private[this] final class RandomAccessFildexFile(private val underlying: RandomAccessFile,
-                                                     private val host: FillerFile)
-        extends FildexFile {
-      override def hostFiller: FillerFile = host
-
-      override def writeData(data: ByteBuffer, size: Long): Unit = {
-        val channel = underlying.getChannel
-        channel.map(FileChannel.MapMode.READ_WRITE, channel.position(), size).put(data)
-        tailPosition += size
-      }
-
-      override def seekToTail(): Unit = underlying.seek(tailPosition)
-
-      override def close(): Unit = underlying.close()
-    }
-
-    def apply(hostFiller: FillerFile): Eval[FildexFile] = ???
-    //Eval.later(new RandomAccessFildexFile(new RandomAccessFile(s"${hostFiller.path}.index", "rw"), hostFiller))
-  }
+  trait FildexFile
 
   trait Data
 
   // Index structure
-  final case class Idx(key: String, startPoint: Long, endPoint: Long)
+  final case class Idx(key: String, startPoint: Long, endPoint: Long) {
+    require(key.getBytes("utf-8").length == 32, "fildex index key should be 32bit String")
+
+    def byteBuffer: ByteBuffer = {
+      val bb = ByteBuffer.allocate(48)
+      bb.put(key.getBytes("utf-8"))
+      bb.putLong(startPoint)
+      bb.putLong(endPoint)
+      bb.flip()
+      bb
+    }
+  }
+
 }

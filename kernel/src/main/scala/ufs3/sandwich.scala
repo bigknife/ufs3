@@ -21,19 +21,19 @@ import sop._
 trait SandwichIn[F[_], In] {
   def head(key: String, bodyLength: Long): Par[F, ByteBuffer]
   def nextBody(in: In): Par[F, Option[ByteBuffer]]
-  def tail(hash: String): Par[F, ByteBuffer]
+  def tail(hash: Array[Byte], bodyLength: Long): Par[F, ByteBuffer]
 }
 object SandwichIn {
   trait Op[In, A]
   final case class Head[In](key: String, bodyLength: Long) extends Op[In, ByteBuffer]
   final case class NextBody[In](in: In)                    extends Op[In, Option[ByteBuffer]]
-  final case class Tail[In](hash: String)                  extends Op[In, ByteBuffer]
+  final case class Tail[In](hash: Array[Byte], bodyLength: Long)                  extends Op[In, ByteBuffer]
 
   class To[F[_], In](implicit IJ: Inject[Op[In, ?], F]) extends SandwichIn[F, In] {
     def nextBody(in: In): Par[F, Option[ByteBuffer]] = liftPar_T[Op[In, ?], F, Option[ByteBuffer]](NextBody[In](in))
     def head(key: String, bodyLength: Long): Par[F, ByteBuffer] =
       liftPar_T[Op[In, ?], F, ByteBuffer](Head[In](key, bodyLength))
-    def tail(hash: String): Par[F, ByteBuffer] = liftPar_T[Op[In, ?], F, ByteBuffer](Tail[In](hash))
+    def tail(hash: Array[Byte], bodyLength: Long): Par[F, ByteBuffer] = liftPar_T[Op[In, ?], F, ByteBuffer](Tail[In](hash, bodyLength))
   }
 
   implicit def to[F[_], In](implicit IJ: Inject[Op[In, ?], F]): SandwichIn[F, In] = new To[F, In]
@@ -43,12 +43,12 @@ object SandwichIn {
   trait Handler[M[_], In] extends NT[Op[In, ?], M] {
     def head(key: String, bodyLength: Long): M[ByteBuffer]
     def nextBody(in: In): M[Option[ByteBuffer]]
-    def tail(hash: String): M[ByteBuffer]
+    def tail(hash: Array[Byte], bodyLength: Long): M[ByteBuffer]
 
     def apply[A](fa: Op[In, A]): M[A] = fa match {
       case Head(key, bodyLength) ⇒ head(key, bodyLength)
       case NextBody(in)          ⇒ nextBody(in)
-      case Tail(hash: String)    ⇒ tail(hash)
+      case Tail(hash, bodyLength)    ⇒ tail(hash, bodyLength)
     }
   }
 }

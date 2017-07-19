@@ -24,7 +24,7 @@ trait Filler[F[_]] {
   def close(ff: FillerFile): Par[F, Unit]
   // allocate space for new sandwich, return the startpoint
   def startAppend(ff: FillerFile): Par[F, Long]
-  def endAppend(ff: FillerFile, endPosition: Long): Par[F, Unit]
+  def endAppend(ff: FillerFile, endPosition: Long): Par[F, FillerFile]
 }
 object Filler {
   sealed trait Op[A]
@@ -32,14 +32,14 @@ object Filler {
   final case class Check(bf: BlockFile)                         extends Op[FillerFile]
   final case class Close(ff: FillerFile)                        extends Op[Unit]
   final case class StartAppend(ff: FillerFile)                  extends Op[Long]
-  final case class EndAppend(ff: FillerFile, endPosition: Long) extends Op[Unit]
+  final case class EndAppend(ff: FillerFile, endPosition: Long) extends Op[FillerFile]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Filler[F] {
     def init(bf: BlockFile): Par[F, FillerFile]                    = liftPar_T[Op, F, FillerFile](Init(bf))
     def check(bf: BlockFile): Par[F, FillerFile]                   = liftPar_T[Op, F, FillerFile](Check(bf))
     def close(ff: FillerFile): Par[F, Unit]                        = liftPar_T[Op, F, Unit](Close(ff))
     def startAppend(ff: FillerFile): Par[F, Long]                  = liftPar_T[Op, F, Long](StartAppend(ff))
-    def endAppend(ff: FillerFile, endPosition: Long): Par[F, Unit] = liftPar_T[Op, F, Unit](EndAppend(ff, endPosition))
+    def endAppend(ff: FillerFile, endPosition: Long): Par[F, FillerFile] = liftPar_T[Op, F, FillerFile](EndAppend(ff, endPosition))
   }
 
   implicit def to[F[_]](implicit I: Inject[Op, F]): Filler[F] = new To[F]
@@ -51,7 +51,7 @@ object Filler {
     def check(blockFile: BlockFile): M[FillerFile]
     def close(ff: FillerFile): M[Unit]
     def startAppend(ff: FillerFile): M[Long]
-    def endAppend(ff: FillerFile, endPosition: Long): M[Unit]
+    def endAppend(ff: FillerFile, endPosition: Long): M[FillerFile]
 
     override def apply[A](fa: Op[A]): M[A] = fa match {
       case Init(bf)                   ⇒ init(bf)
