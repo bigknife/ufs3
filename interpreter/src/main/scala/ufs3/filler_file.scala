@@ -11,38 +11,38 @@ package filler
 
 import java.nio.ByteBuffer
 
-import sun.jvm.hotspot.runtime.Bytes
 import ufs3.interpreter.block.RandomAccessBlockFile
-import ufs3.kernel.block.Block.BlockFile
 import ufs3.kernel.filler.Filler.FillerFile
 import ufs3.interpreter.layout._
 
 import scala.language.implicitConversions
 
-final class RandomFillerFile(tailPosition: Long, private val underlying: RandomAccessBlockFile) extends FillerFile {
+final class RandomFillerFile(private val layout: FillerFileLayout, private val underlying: RandomAccessBlockFile) extends FillerFile {
 
-  def headBytes: ByteBuffer = {
-    val layout = FillerFileLayout(underlying.size(), tailPosition)
-    layout.head.byteBuffer
+  def init(): RandomFillerFile = {
+    refreshHead()
+    this
   }
 
+  def tailPos: Long = layout.tailPosition.longValue
 
+  def tailPos(pos: Long): RandomFillerFile = {
+    import Layout._
+    val newLayout = layout.tailPosition(pos.`8Bytes`)
+    RandomFillerFile(newLayout, underlying)
+  }
 
-  def tailPos: Long = tailPosition
-
-  def tailMoveTo(pos: Long): Unit = {
-    // underlying move to 12, and write pos
-    underlying.seek(12)
-    import layout.Layout._
-    underlying.write(pos.`8Bytes`.byteBuffer, 8)
+  def refreshHead(): Unit = {
+    underlying.seek(0)
+    underlying.write(layout.head.byteBuffer, FillerFileLayout.HEAD_SIZE)
   }
 }
 
 object RandomFillerFile {
   val HEAD_SIZE: Long = FillerFileLayout.HEAD_SIZE.toLong
 
-  def apply(tailPosition: Long, underlying: RandomAccessBlockFile): RandomFillerFile =
-    new RandomFillerFile(tailPosition, underlying)
+  def apply(layout: FillerFileLayout, underlying: RandomAccessBlockFile): RandomFillerFile =
+    new RandomFillerFile(layout, underlying)
 
   def magicMatched(bytes: Array[Byte]): Boolean = bytes sameElements FillerFileLayout.HEAD_MAGIC
 

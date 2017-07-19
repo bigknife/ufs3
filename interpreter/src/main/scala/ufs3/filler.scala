@@ -16,14 +16,12 @@ import ufs3.kernel.filler._
 import cats.effect.IO
 import ufs3.kernel.block.Block
 import ufs3.interpreter.block.RandomAccessBlockFile
+import ufs3.interpreter.layout.FillerFileLayout
 
 
 /**
   * Filler Interpreter
-  * Filler File Layout:
-  * [0, 4): head magic 'fill'
-  * [4, 12): blocksize
-  * [12, 20): tail position
+  * Filler File Layout: @see {FillerFileLayout}
   */
 trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Config, ?]] {
 
@@ -31,10 +29,8 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
     // init: seek to 0, and insert filler head bytes
     IO {
       import RandomAccessBlockFile._
-      val rff = RandomFillerFile(tailPosition = 0, underlying = blockFile)
-      blockFile.seek(0)
-      blockFile.write(rff.headBytes, RandomFillerFile.HEAD_SIZE)
-      rff
+      val layout = FillerFileLayout(blockFile.size())
+      RandomFillerFile(layout, underlying = blockFile).init()
     }
   }
 
@@ -47,30 +43,22 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
   def check(blockFile: Block.BlockFile): Kleisli[IO, FillerInterpreter.Config, Filler.FillerFile] = Kleisli { config ⇒
     IO {
       // TODO re-think check logic
+      // 0. check the size if >= head size
+      // 1. read all head
+      // 2. check if magic eq the 'FILL'
+      // 3. check if blockSize eq blockFile.size
+
       import RandomAccessBlockFile._
-      if (blockFile.size() < RandomFillerFile.HEAD_SIZE) throw new IllegalAccessException("the block file is not a FillerFile")
+      require(blockFile.size() >= RandomFillerFile.HEAD_SIZE,
+        "the block file is not a FillerFile, file size is less than HEAD_SIZE")
 
       val headBytes = {
         blockFile.seek(0); blockFile.read(RandomFillerFile.HEAD_SIZE)
       }.array()
-      val (magic, rest1) = headBytes.splitAt(4)
+      // the magic check is in the `resoveBytes`
+      val layout = FillerFileLayout.resolveBytes(headBytes)
+      RandomFillerFile(layout = layout, underlying = blockFile)
 
-
-      if (!RandomFillerFile.magicMatched(magic)) throw new IllegalAccessException("the block file is not a FillerFile")
-      else {
-        val (blockSize, tailPosition) = rest1.splitAt(8)
-
-        def bytesToLong(bytes: Array[Byte]): Long = {
-          val bf = ByteBuffer.wrap(bytes)
-          bf.flip()
-          bf.getLong
-        }
-
-        // blockSize === blockFile.size
-        if (bytesToLong(blockSize) != blockFile.size()) throw new IllegalStateException("the filler file block size is not illegal")
-
-        RandomFillerFile(tailPosition = bytesToLong(tailPosition), underlying = blockFile)
-      }
     }
   }
 
@@ -84,7 +72,7 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
   def endAppend(ff: Filler.FillerFile, endPosition: Long): Kleisli[IO, FillerInterpreter.Config, Unit] = Kleisli {config ⇒
     IO {
       import RandomFillerFile._
-      ff.tailMoveTo(endPosition)
+      ff.tailPos(endPosition).refreshHead()
     }
   }
 }
