@@ -9,37 +9,45 @@ package ufs3
 package interpreter
 package filler
 
-import java.nio.ByteBuffer
-
-import ufs3.interpreter.block.RandomAccessBlockFile
+import ufs3.interpreter.block.{BlockFileBasedFile, RandomAccessBlockFile}
 import ufs3.kernel.filler.Filler.FillerFile
 import ufs3.interpreter.layout._
 
 import scala.language.implicitConversions
 
-final class RandomFillerFile(private val layout: FillerFileLayout, private val underlying: RandomAccessBlockFile) extends FillerFile {
+final class RandomFillerFile(private val layout: FillerFileLayout, val underlying: RandomAccessBlockFile)
+    extends FillerFile
+    with BlockFileBasedFile {
 
   def init(): RandomFillerFile = {
     refreshHead()
     this
   }
 
+  // current tail position
   def tailPos: Long = layout.tailPosition.longValue
 
+  // set current tail position
   def tailPos(pos: Long): RandomFillerFile = {
     import Layout._
     val newLayout = layout.tailPosition(pos.`8Bytes`)
     RandomFillerFile(newLayout, underlying)
   }
 
-  def refreshHead(): Unit = {
-    underlying.seek(0)
-    underlying.write(layout.head.byteBuffer, FillerFileLayout.HEAD_SIZE)
+  // refresh head in the file
+  def refreshHead(): RandomFillerFile = {
+    seek(0)
+    write(layout.head.byteBuffer)
+    this
   }
+
+  // get current version
+  def version: Int = layout.version.intValue
+
+
 }
 
 object RandomFillerFile {
-  val HEAD_SIZE: Long = FillerFileLayout.HEAD_SIZE.toLong
 
   def apply(layout: FillerFileLayout, underlying: RandomAccessBlockFile): RandomFillerFile =
     new RandomFillerFile(layout, underlying)

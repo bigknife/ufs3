@@ -3,6 +3,9 @@ package interpreter
 package layout
 
 import java.nio.ByteBuffer
+
+import ufs3.kernel.fildex.Fildex.Idx
+
 import scala.language.implicitConversions
 
 object Layout {
@@ -18,7 +21,7 @@ object Layout {
     }
 
     def longValue: Long = byteBuffer.getLong
-
+    def intValue: Int = byteBuffer.getInt
 
     override def toString: String = s"${len}Bytes"
   }
@@ -29,6 +32,8 @@ object Layout {
   // long
   case class `8Bytes`(bytes: Bytes) extends FixedLengthBytes(8)
   type Long_Bytes = `8Bytes`
+
+  case class `24Bytes`(bytes: Bytes) extends FixedLengthBytes(24)
 
   // md5...
   case class `32Bytes`(bytes: Bytes) extends FixedLengthBytes(32)
@@ -53,6 +58,7 @@ object Layout {
     def `4Bytes`: Layout.`4Bytes`     = Layout.`4Bytes`(ev(a))
     def `8Bytes`: Layout.`8Bytes`     = Layout.`8Bytes`(ev(a))
     def `32Bytes`: Layout.`32Bytes`   = Layout.`32Bytes`(ev(a))
+    def `24Bytes`: Layout.`24Bytes`   = Layout.`24Bytes`(ev(a))
     def `60Bytes`: Layout.`60Bytes`   = Layout.`60Bytes`(ev(a))
     def `64Bytes`: Layout.`64Bytes`   = Layout.`64Bytes`(ev(a))
     def `100Bytes`: Layout.`100Bytes` = Layout.`100Bytes`(ev(a))
@@ -64,7 +70,7 @@ object Layout {
   implicit val str2BytesInst: String ⇒ Bytes = x ⇒ x.getBytes("utf-8")
 }
 
-trait FillerFileLayout {self ⇒
+trait FillerFileLayout { self ⇒
   import Layout._
   def magic: `4Bytes` = `4Bytes`(FillerFileLayout.HEAD_MAGIC)
   def blockSize: `8Bytes`
@@ -76,13 +82,12 @@ trait FillerFileLayout {self ⇒
     (magic ++ blockSize ++ tailPosition ++ version ++ versionPos).bytes
   )
 
-  def tailPosition(nv: `8Bytes`): FillerFileLayout = new FillerFileLayout{
-    def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.blockSize
+  def tailPosition(nv: `8Bytes`): FillerFileLayout = new FillerFileLayout {
+    def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = self.blockSize
     def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = nv
-    def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = self.version
-    def versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.versionPos
+    def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = self.version
+    def versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes`   = self.versionPos
   }
-
 
 }
 
@@ -91,7 +96,7 @@ object FillerFileLayout {
   val HEAD_SIZE               = 32L
   def apply(
       _blockSize: Long,
-      _tailPosition: Long = 0,
+      _tailPosition: Long = HEAD_SIZE,
       _version: Int = 0,
       _versionPos: Long = HEAD_SIZE
   ): FillerFileLayout =
@@ -99,13 +104,10 @@ object FillerFileLayout {
       import Layout._
       // magic is constant
 
-      // block size is a long
-      def blockSize: Layout.Long_Bytes = _blockSize.`8Bytes`
-      // tail position is a long
+      def blockSize: Layout.Long_Bytes    = _blockSize.`8Bytes`
       def tailPosition: Layout.Long_Bytes = _tailPosition.`8Bytes`
-      // version number is a int
-      def version: Layout.Int_Bytes     = _version.`4Bytes`
-      def versionPos: Layout.Long_Bytes = _versionPos.`8Bytes`
+      def version: Layout.Int_Bytes       = _version.`4Bytes`
+      def versionPos: Layout.Long_Bytes   = _versionPos.`8Bytes`
     }
 
   import Layout._
@@ -124,5 +126,69 @@ object FillerFileLayout {
       def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = _blockSize.`8Bytes`
       def versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes`   = _versionPosition.`8Bytes`
     }
+  }
+}
+
+trait FildexFileLayout {outter ⇒
+  import Layout._
+  def magic: `4Bytes` = `4Bytes`(FillerFileLayout.HEAD_SIZE)
+  def blockSize: `8Bytes`
+  def tailPosition: `8Bytes`
+  def version: `4Bytes`
+
+  def head: `24Bytes` = `24Bytes`(
+    (magic ++ blockSize ++ tailPosition ++ version).bytes
+  )
+
+  def version(v: Int): FildexFileLayout = new FildexFileLayout {
+    def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.tailPosition
+    def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = v.`4Bytes`
+    def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.blockSize
+  }
+  def tailPosition(p: Long): FildexFileLayout = new FildexFileLayout {
+    def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = p.`8Bytes`
+    def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = outter.version
+    def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.blockSize
+  }
+}
+
+object FildexFileLayout {
+  val HEAD_MAGIC: Array[Byte] = "FILD".getBytes("iso8859_1")
+  val HEAD_SIZE: Long         = 24
+  import Layout._
+
+  def apply(_blockSize: Long, _tailPosition: Long = HEAD_SIZE, _version: Int = 0): FildexFileLayout =
+    new FildexFileLayout {
+      import Layout._
+      def tailPosition: Layout.`8Bytes` = _tailPosition.`8Bytes`
+      def version: Layout.`4Bytes`      = _version.`4Bytes`
+      def blockSize: Layout.`8Bytes`    = _blockSize.`8Bytes`
+    }
+
+  def resolveBytes(bytes: Bytes): FildexFileLayout = {
+    require(bytes.length == HEAD_SIZE, s"fildex file header length should be $HEAD_SIZE")
+    val magicBytes = bytes.take(4)
+    require(magicBytes sameElements HEAD_MAGIC, "fildex file magic is not correct")
+
+    val _blockSize    = bytes.slice(4, 12)
+    val _tailPosition = bytes.slice(12, 20)
+    val _version      = bytes.slice(20, 24)
+    new FildexFileLayout {
+      def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = _tailPosition.`8Bytes`
+      def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = _version.`4Bytes`
+      def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = _blockSize.`8Bytes`
+    }
+  }
+}
+
+object IdxLayout {
+  import Layout._
+  val SIZE: Long = 48 // key is 32, startPoint 8, end point 8
+  def resolveBytes(bytes: Array[Byte]): Idx = {
+    require(bytes.length == SIZE, s"fildex index key item should be $SIZE Bytes")
+    val key = new String(bytes.take(32), "utf-8")
+    val startPoint = bytes.slice(32, 8).`8Bytes`.longValue
+    val endPoint = bytes.slice(40, 8).`8Bytes`.longValue
+    Idx(key, startPoint, endPoint)
   }
 }

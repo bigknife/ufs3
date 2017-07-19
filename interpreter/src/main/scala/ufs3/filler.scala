@@ -9,14 +9,13 @@ package ufs3
 package interpreter
 package filler
 
-import java.nio.ByteBuffer
-
 import cats.data.Kleisli
 import ufs3.kernel.filler._
 import cats.effect.IO
 import ufs3.kernel.block.Block
 import ufs3.interpreter.block.RandomAccessBlockFile
 import ufs3.interpreter.layout.FillerFileLayout
+import ufs3.kernel.filler.Filler.FillerFile
 
 
 /**
@@ -42,18 +41,17 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
 
   def check(blockFile: Block.BlockFile): Kleisli[IO, FillerInterpreter.Config, Filler.FillerFile] = Kleisli { config ⇒
     IO {
-      // TODO re-think check logic
       // 0. check the size if >= head size
       // 1. read all head
       // 2. check if magic eq the 'FILL'
       // 3. check if blockSize eq blockFile.size
 
       import RandomAccessBlockFile._
-      require(blockFile.size() >= RandomFillerFile.HEAD_SIZE,
-        "the block file is not a FillerFile, file size is less than HEAD_SIZE")
+      require(blockFile.size() >= FillerFileLayout.HEAD_SIZE,
+        s"the block file lenght should be greater than ${FillerFileLayout.HEAD_SIZE}")
 
       val headBytes = {
-        blockFile.seek(0); blockFile.read(RandomFillerFile.HEAD_SIZE)
+        blockFile.seek(0); blockFile.read(FillerFileLayout.HEAD_SIZE)
       }.array()
       // the magic check is in the `resoveBytes`
       val layout = FillerFileLayout.resolveBytes(headBytes)
@@ -69,7 +67,7 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
     }
   }
 
-  def endAppend(ff: Filler.FillerFile, endPosition: Long): Kleisli[IO, FillerInterpreter.Config, Unit] = Kleisli {config ⇒
+  def endAppend(ff: Filler.FillerFile, endPosition: Long): Kleisli[IO, FillerInterpreter.Config, FillerFile] = Kleisli {config ⇒
     IO {
       import RandomFillerFile._
       ff.tailPos(endPosition).refreshHead()

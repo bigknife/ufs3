@@ -38,7 +38,7 @@ object SandwitchTest {
             Some(bb)
           }
       }
-      def tail(hash: String): IO[ByteBuffer] = IO { val buf = ByteBuffer.wrap("---TAIL---\r\n".getBytes); callback(buf); buf }
+      def tail(hash: Array[Byte], bodyLength: Long): IO[ByteBuffer] = IO { val buf = ByteBuffer.wrap("---TAIL---\r\n".getBytes); callback(buf); buf }
     }
   }
 
@@ -55,7 +55,7 @@ object SandwitchTest {
       for {
         _ ← head(key = "hi", bodyLength = 10)
         _ ← allBody(in)
-        _ ← tail("")
+        _ ← tail("".getBytes, 0)
       } yield ()
 
     /*

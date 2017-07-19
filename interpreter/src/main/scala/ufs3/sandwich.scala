@@ -28,7 +28,7 @@ object Sandwich {
   val HEAD_LENGTH: Int = 52
 
   // the size of Sandwich-Tail is 32 Bytes, the hash of the body
-  val TAIL_LENGTH: Int = 32
+  val HASH_SIZE: Int = 32
 }
 
 trait SandwichOutInterpreter extends SandwichOut.Handler[Kleisli[IO, SandwichOutInterpreter.Config, ?], OutputStream] {
@@ -78,14 +78,14 @@ trait SandwichOutInterpreter extends SandwichOut.Handler[Kleisli[IO, SandwichOut
   def tail(bb: ByteBuffer, out: OutputStream): Kleisli[IO, SandwichOutInterpreter.Config, Unit] = Kleisli { config ⇒
     IO {
       try {
-        if (bb.array().length == Sandwich.TAIL_LENGTH) {
+        if (bb.array().length == Sandwich.HASH_SIZE) {
           // if has cache, write
           val cached = cache(out)
           if (cached.isDefined) out.write(cached.get.list.toArray)
           out.write(bb.array())
           out.flush()
         }
-        else throw new java.io.IOException(s"the Sandwich tail size SHOULD BE ${Sandwich.TAIL_LENGTH}")
+        else throw new java.io.IOException(s"the Sandwich tail size SHOULD BE ${Sandwich.HASH_SIZE}")
       } finally {
         // remove cache
         cache -= out
@@ -131,11 +131,11 @@ trait SandwichInInterpreter extends SandwichIn.Handler[Kleisli[IO, SandwichInInt
 
   }
 
-  def tail(hash: String): Kleisli[IO, SandwichInInterpreter.Config, ByteBuffer] = Kleisli {config ⇒
+  def tail(hash: Array[Byte], bodyLength: Long): Kleisli[IO, SandwichInInterpreter.Config, ByteBuffer] = Kleisli {config ⇒
     IO {
-      val bytes = hash.getBytes("iso8859_1")
-      if (bytes.length != Sandwich.TAIL_LENGTH) throw new java.io.IOException(s"the Sandwich tail size SHOULD BE ${Sandwich.TAIL_LENGTH}")
-      else ByteBuffer.wrap(bytes)
+      import ufs3.interpreter.layout.Layout._
+      require(hash.length == Sandwich.HASH_SIZE, s"the Sandwich tail size SHOULD BE ${Sandwich.HASH_SIZE}")
+      ByteBuffer.wrap(hash ++ bodyLength.`8Bytes`.bytes)
     }
   }
 }

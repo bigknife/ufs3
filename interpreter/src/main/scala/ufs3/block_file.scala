@@ -29,10 +29,20 @@ private[interpreter] final class RandomAccessBlockFile(private val underlying: R
   def seek(pos: Long): Unit = underlying.seek(pos)
   def read(size: Long): ByteBuffer =
     underlying.getChannel.map(FileChannel.MapMode.READ_ONLY, underlying.getChannel.position(), size)
-  def write(data: ByteBuffer, size: Long): Unit = {
-    underlying.getChannel
-      .map(FileChannel.MapMode.READ_WRITE, underlying.getChannel.position(), size)
-      .put(data); ()
+
+  // write size of data
+  def write(data: ByteBuffer, size: Int): Unit = {
+    if (data.limit() != 0 && size > 0) {
+
+      val nbb = ByteBuffer.wrap(data.array())
+      nbb.limit(Math.min(data.limit(), size))
+
+      underlying.getChannel
+        .map(FileChannel.MapMode.READ_WRITE, underlying.getChannel.position(), nbb.limit().toLong)
+        .put(nbb)
+      ()
+
+    } else ()
   }
   def lock(): FileLock = underlying.getChannel.tryLock()
   def size(): Long = underlying.length()
@@ -48,4 +58,12 @@ object RandomAccessBlockFile {
   }
   // assure that in `interpreter` scope, the `BlockFile`'s sub type is only RandomAccessBlockFile
   implicit def from(b: BlockFile): RandomAccessBlockFile = b.asInstanceOf[RandomAccessBlockFile]
+}
+
+private [interpreter] trait BlockFileBasedFile {
+  def underlying: RandomAccessBlockFile
+
+  def seek(position: Long): Unit = underlying.seek(position)
+  def write(bb: ByteBuffer, size: Int): Unit = underlying.write(bb, size)
+  def write(bb: ByteBuffer): Unit = underlying.write(bb, bb.limit())
 }
