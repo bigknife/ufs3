@@ -107,8 +107,8 @@ object TestFix {
     import Block.Size._
 
     def fillerReadBufferSize: Block.Size = 8.KiB
-    val idxBlockSize: Block.Size         = 2.GiB
-    val fillerBlockSize: Block.Size      = 100.GiB
+    val idxBlockSize: Block.Size         = 2.MiB
+    val fillerBlockSize: Block.Size      = 100.MiB
     val fillerBlockPath: Block.Path      = Block.Path("/Users/bigknife/Working/tmp/ufs3.filler")
   }
 
@@ -178,14 +178,15 @@ object TestSute {
   def main(args: Array[String]): Unit = {
     // startup , only run once
     //StartupTest.test()
-    println("----------------------")
+    //println("----------------------")
     // run WriteFileTest.test()
     // test write and read
-    //val key = WriteFileTest.test(1)
-
-    val key = "7335ee53fdad924fc74891f6ef1540f3"
+    val key = WriteFileTest.test(1)
+    println("--------------")
+    //println(key)
+    //val key = "7335ee53fdad924fc74891f6ef1540f3"
     //val key = "856318dfffccfb5847b73a26472637ac"
-
+    //val key = "acb9ac72b5027d97c1bf83c3c138cc6d"
     ReadFileTest.test(key)
 
   }

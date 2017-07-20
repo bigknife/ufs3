@@ -148,8 +148,10 @@ package object core {
   // 2. shutdown fildex file
   // 3. shutdown block
   // 4. ok
-  def shutdown[F[_]](
-      ufs3: UFS3)(implicit B: Block[F], F: Filler[F], FI: Fildex[F], L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
+  def shutdown[F[_]](ufs3: UFS3)(implicit B: Block[F],
+                                 F: Filler[F],
+                                 FI: Fildex[F],
+                                 L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
     Kleisli { coreConfig ⇒
       import L._
       val prog: Id[SOP[F, Unit]] = for {
@@ -207,19 +209,19 @@ package object core {
             // 从 startpos + headB 的地方写入
             writeBody(md, startPos + headB.limit())
           }
-        _ ← debug(s"writed $bodyLength bytes")
-          //TODO calcute the md5
+          _     ← debug(s"writed $bodyLength bytes")
           _     ← debug(md.digest().map("%02x".format(_)).mkString(""))
           tailB ← S.tail(md.digest().map("%02x".format(_)).mkString("").getBytes("iso8859_1"), bodyLength)
+          _     ← B.seek(out.blockFile.get(), startPos + headB.limit() + bodyLength)
           _     ← B.write(out.blockFile.get(), tailB)
           //_     ← BAK.send(tailB)
-          newFildexFile ← FI.append(
-            out.fildexFile.get(),
-            Idx(key, startPos, startPos + headB.limit() + bodyLength + tailB.limit()))
+          newFildexFile ← FI.append(out.fildexFile.get(),
+                                    Idx(key, startPos, startPos + headB.limit() + bodyLength + tailB.limit()))
           newFillerFile ← F.endAppend(out.fillerFile.get(),
                                       startPos,
                                       startPos + headB.limit() + bodyLength + tailB.limit())
-          _ ← debug(s"writed. startPos: $startPos, endPos: ${startPos + headB.limit() + bodyLength + tailB.limit()}, ${headB.limit()} $bodyLength ${tailB.limit()}")
+          _ ← debug(s"writed. startPos: $startPos, endPos: ${startPos + headB.limit() + bodyLength + tailB
+            .limit()}, ${headB.limit()} $bodyLength ${tailB.limit()}")
         } yield {
           out.fillerFile.set(newFillerFile)
           out.fildexFile.set(newFildexFile)
@@ -243,7 +245,7 @@ package object core {
       import L._
       val prog: Id[SOP[F, Unit]] = for {
         optIdx ← FI.fetch(key, from.fildexFile.get())
-      _ ← debug(s"key($key) idx is $optIdx")
+        _      ← debug(s"key($key) idx is $optIdx")
         _ ← if (optIdx.nonEmpty) {
           val startPoint = optIdx.get.startPoint
           val endPoint   = optIdx.get.endPoint
@@ -272,7 +274,7 @@ package object core {
           for {
             headSize ← S.headSize()
             tailSize ← S.tailSize()
-          _ ← debug(s"start: ${startPoint + headSize}, remain: ${endPoint - startPoint - headSize - tailSize}")
+            _        ← debug(s"start: ${startPoint + headSize}, remain: ${endPoint - startPoint - headSize - tailSize}")
             headB    ← read(startPoint, headSize)
             _        ← S.head(headB, to)
             _ ← readBody(startPoint + headSize,

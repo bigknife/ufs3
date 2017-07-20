@@ -126,11 +126,6 @@ object SandwichOutInterpreter {
   def apply(): SandwichOutInterpreter = new SandwichOutInterpreter {}
 }
 
-
-object T {
-  var s: Int = 0
-}
-
 trait SandwichInInterpreter extends SandwichIn.Handler[Kleisli[IO, SandwichInInterpreter.Config, ?], InputStream] {
   def head(key: String, bodyLength: Long): Kleisli[IO, SandwichInInterpreter.Config, ByteBuffer] = Kleisli { config ⇒
     IO {
@@ -150,11 +145,9 @@ trait SandwichInInterpreter extends SandwichIn.Handler[Kleisli[IO, SandwichInInt
       val buff   = new Array[Byte](config.inputBufferSize)
       val readed = in.read(buff)
       if (readed != -1) {
-        T.s = T.s + readed
         Some(ByteBuffer.wrap(buff, 0, readed))
       }
       else {
-        println(s"读入了： ${T.s}")
         None
       }
     }

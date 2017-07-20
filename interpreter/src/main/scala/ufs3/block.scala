@@ -64,8 +64,7 @@ trait BlockInterpreter extends Block.Handler[Kleisli[IO, Config, ?]] {
   override protected[this] def write(blockFile: Block.BlockFile, data: ByteBuffer): Kleisli[IO, Config, Unit] =
     Kleisli { config ⇒
       IO {
-        val size = if (data.position() == 0) data.limit() else data.flip().limit()
-        blockFile.write(data, size)
+        blockFile.write(data)
       }
     }
 
