@@ -46,6 +46,27 @@ private[interpreter] final class RandomAccessBlockFile(private val underlying: R
   }
   def lock(): FileLock = underlying.getChannel.tryLock()
   def size(): Long = underlying.length()
+  //reset file size
+  def size(l: Long): RandomAccessBlockFile = {
+    /*
+    underlying.seek(l - 1)
+    val bb = ByteBuffer.allocate(1)
+    bb.put(0.toByte)
+    bb.flip()
+    underlying.getChannel.map(FileChannel.MapMode.READ_WRITE, underlying.getChannel.position(), 1L).put(bb)
+    underlying.getChannel.force(false)
+    */
+    /*
+    underlying.seek(l)
+    val helloWorld = {
+      val bb = ByteBuffer.wrap("hello,world".getBytes)
+      bb
+    }
+    underlying.getChannel.map(FileChannel.MapMode.READ_WRITE, underlying.getChannel.position(), 11).put(helloWorld)
+    */
+    underlying.setLength(l)
+    this
+  }
 
 }
 object RandomAccessBlockFile {

@@ -82,13 +82,28 @@ trait FillerFileLayout { self ⇒
     (magic ++ blockSize ++ tailPosition ++ version ++ versionPos).bytes
   )
 
-  def tailPosition(nv: `8Bytes`): FillerFileLayout = new FillerFileLayout {
+  def tailPosition(p: Long): FillerFileLayout = new FillerFileLayout {
     def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = self.blockSize
-    def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = nv
+    def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = p.`8Bytes`
     def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = self.version
     def versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes`   = self.versionPos
   }
 
+  def version(v: Int): FillerFileLayout = new FillerFileLayout {
+    import Layout._
+    def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.tailPosition
+    def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = v.`4Bytes`
+    def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.blockSize
+    def versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.versionPos
+  }
+
+  def versionPos(p: Long): FillerFileLayout = new FillerFileLayout {
+    import Layout._
+    def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.tailPosition
+    def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = self.version
+    def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.blockSize
+    def versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = p.`8Bytes`
+  }
 }
 
 object FillerFileLayout {
@@ -131,7 +146,7 @@ object FillerFileLayout {
 
 trait FildexFileLayout {outter ⇒
   import Layout._
-  def magic: `4Bytes` = `4Bytes`(FillerFileLayout.HEAD_SIZE)
+  def magic: `4Bytes` = `4Bytes`(FildexFileLayout.HEAD_MAGIC)
   def blockSize: `8Bytes`
   def tailPosition: `8Bytes`
   def version: `4Bytes`
@@ -187,8 +202,8 @@ object IdxLayout {
   def resolveBytes(bytes: Array[Byte]): Idx = {
     require(bytes.length == SIZE, s"fildex index key item should be $SIZE Bytes")
     val key = new String(bytes.take(32), "utf-8")
-    val startPoint = bytes.slice(32, 8).`8Bytes`.longValue
-    val endPoint = bytes.slice(40, 8).`8Bytes`.longValue
+    val startPoint = bytes.slice(32, 40).`8Bytes`.longValue
+    val endPoint = bytes.slice(40, 48).`8Bytes`.longValue
     Idx(key, startPoint, endPoint)
   }
 }

@@ -27,8 +27,8 @@ object Sandwich {
   val HEAD_MAGIC: Array[Byte] = "UFS3".getBytes
   val HEAD_LENGTH: Int = 52
 
-  // the size of Sandwich-Tail is 32 Bytes, the hash of the body
-  val HASH_SIZE: Int = 32
+  // the size of Sandwich-Tail is 16 Bytes, the hash of the body
+  val HASH_SIZE: Int = 16
 }
 
 trait SandwichOutInterpreter extends SandwichOut.Handler[Kleisli[IO, SandwichOutInterpreter.Config, ?], OutputStream] {
@@ -82,6 +82,7 @@ trait SandwichOutInterpreter extends SandwichOut.Handler[Kleisli[IO, SandwichOut
           // if has cache, write
           val cached = cache(out)
           if (cached.isDefined) out.write(cached.get.list.toArray)
+          //TODO: bb trap, array may be null
           out.write(bb.array())
           out.flush()
         }

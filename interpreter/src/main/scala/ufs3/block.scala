@@ -34,11 +34,13 @@ trait BlockInterpreter extends Block.Handler[Kleisli[IO, Config, ?]] {
   override protected[this] def create(path: Block.Path, size: Block.Size): Kleisli[IO, Config, Block.BlockFile] =
     Kleisli { config ⇒
       IO {
+        /*
         val filePath = path.file.value.getPath
         val raf      = new RandomAccessFile(filePath, "rw")
         raf.setLength(size.sizeInByte)
         raf.close()
-        RandomAccessBlockFile(path, FileMode.ReadWrite).value
+        */
+        RandomAccessBlockFile(path, FileMode.ReadWrite).map(x ⇒ x.size(size.sizeInByte)).value
       }
     }
 

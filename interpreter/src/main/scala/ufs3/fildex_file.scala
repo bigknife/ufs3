@@ -59,7 +59,8 @@ final class RandomFildexFile(private val layout: FildexFileLayout,
     def _index(start: Long, end: Long, acc: Map[String, Idx]): Map[String, Idx] = {
       if (end > start) {
         underlying.seek(start)
-        val bytes48 = underlying.read(IdxLayout.SIZE).array()
+        val bytes48 = new Array[Byte](IdxLayout.SIZE.toInt)
+        underlying.read(IdxLayout.SIZE).get(bytes48)
         val idx = IdxLayout.resolveBytes(bytes48)
         val accNew = acc + (idx.key → idx)
         _index(start + IdxLayout.SIZE, end, accNew)
