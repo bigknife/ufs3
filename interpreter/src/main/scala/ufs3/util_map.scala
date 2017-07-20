@@ -21,7 +21,7 @@ sealed trait AtomicMap[K, V] {
 
 object AtomicMap {
   private[this] class AtomicMap_[K, V]() extends AtomicMap[K, V] {self ⇒
-    private[this] val atom = new AtomicReference[Map[K, V]]()
+    private[this] val atom = new AtomicReference[Map[K, V]](Map.empty)
 
     @tailrec
     final def +=(kv: (K, V)): Unit = {

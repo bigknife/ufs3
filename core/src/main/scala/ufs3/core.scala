@@ -49,6 +49,7 @@ package object core {
     def fillerBlockPath: Block.Path
     def fillerBlockSize: Block.Size
     def idxBlockSize: Block.Size
+    def fillerReadBufferSize: Block.Size
   }
 
   // startup ufs3
@@ -202,20 +203,23 @@ package object core {
                 } else
                   Par.pure[F, Long](0): SOP[F, Long] // implicitly transformed by liftPAR_to_SOP
                 //_ ← if (obb.nonEmpty) BAK.send(obb.get) else Par.pure[F, Unit](()) // backup body
-              } yield nextLength + obb.map(_.array().length).getOrElse(0)
+              } yield nextLength + obb.map(_.limit()).getOrElse(0)
             // 从 startpos + headB 的地方写入
             writeBody(md, startPos + headB.limit())
           }
+        _ ← debug(s"writed $bodyLength bytes")
           //TODO calcute the md5
           _     ← debug(md.digest().map("%02x".format(_)).mkString(""))
-          tailB ← S.tail(md.digest(), bodyLength)
+          tailB ← S.tail(md.digest().map("%02x".format(_)).mkString("").getBytes("iso8859_1"), bodyLength)
           _     ← B.write(out.blockFile.get(), tailB)
           //_     ← BAK.send(tailB)
-          newFildexFile ← FI.append(out.fildexFile.get(),
-                                    Idx(key, startPos, headB.array().length + bodyLength + tailB.array().length))
+          newFildexFile ← FI.append(
+            out.fildexFile.get(),
+            Idx(key, startPos, startPos + headB.limit() + bodyLength + tailB.limit()))
           newFillerFile ← F.endAppend(out.fillerFile.get(),
                                       startPos,
-                                      startPos + headB.array().length + bodyLength + tailB.array().length)
+                                      startPos + headB.limit() + bodyLength + tailB.limit())
+          _ ← debug(s"writed. startPos: $startPos, endPos: ${startPos + headB.limit() + bodyLength + tailB.limit()}, ${headB.limit()} $bodyLength ${tailB.limit()}")
         } yield {
           out.fillerFile.set(newFillerFile)
           out.fildexFile.set(newFildexFile)
@@ -229,51 +233,57 @@ package object core {
   // 2. read head
   // 3. read body recursively
   // 4. read tail
-  def read[F[_], Out](key: String, bufferSize: Long, from: UFS3, to: Out)(
-      implicit B: Block[F],
-      F: Filler[F],
-      FI: Fildex[F],
-      S: SandwichOut[F, Out]): Kleisli[Id, CoreConfig, SOP[F, Unit]] = Kleisli { coreConfig ⇒
-    import Size._
-    val prog: Id[SOP[F, Unit]] = for {
-      optIdx ← FI.fetch(key, from.fildexFile.get())
-      _ ← if (optIdx.nonEmpty) {
-        val startPoint     = optIdx.get.startPoint
-        val endPoint       = optIdx.get.endPoint
-        val headSize: Long = 0
-        val tailSize: Long = 0
+  def read[F[_], Out](key: String, from: UFS3, to: Out)(implicit B: Block[F],
+                                                        F: Filler[F],
+                                                        FI: Fildex[F],
+                                                        S: SandwichOut[F, Out],
+                                                        L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
+    Kleisli { coreConfig ⇒
+      import Size._
+      import L._
+      val prog: Id[SOP[F, Unit]] = for {
+        optIdx ← FI.fetch(key, from.fildexFile.get())
+      _ ← debug(s"key($key) idx is $optIdx")
+        _ ← if (optIdx.nonEmpty) {
+          val startPoint = optIdx.get.startPoint
+          val endPoint   = optIdx.get.endPoint
 
-        def read(pos: Long, length: Long): SOP[F, ByteBuffer] =
-          for {
-            _  ← B.seek(from.blockFile.get(), pos)
-            bb ← B.read(from.blockFile.get(), length.B)
-          } yield bb
+          def read(pos: Long, length: Long): SOP[F, ByteBuffer] =
+            for {
+              _  ← B.seek(from.blockFile.get(), pos)
+              bb ← B.read(from.blockFile.get(), length.B)
+            } yield bb
 
-        def readBody(pos: Long, length: Long, remain: Long): SOP[F, Unit] =
+          def readBody(pos: Long, length: Long, remain: Long): SOP[F, Unit] =
+            for {
+              _ ← B.seek(from.blockFile.get(), pos)
+              _ ← if (remain > 0) {
+                val toRead = Math.min(length, remain)
+                for {
+                  bb ← B.read(from.blockFile.get(), toRead.B)
+                  _  ← S.outputBody(bb, to)
+                  _  ← readBody(pos + toRead, length, remain - toRead)
+                } yield ()
+              } else SOP.pure[F, Unit](())
+            } yield ()
+          // 1. read head
+          // 2. read body recursively
+          // 3. read tail
           for {
-            _ ← B.seek(from.blockFile.get(), pos)
-            _ ← if (remain > 0) {
-              val toRead = Math.min(length, remain)
-              for {
-                bb ← B.read(from.blockFile.get(), toRead.B)
-                _  ← S.outputBody(bb, to)
-                _  ← readBody(pos + toRead, length, remain - toRead)
-              } yield ()
-            } else SOP.pure[F, Unit](())
+            headSize ← S.headSize()
+            tailSize ← S.tailSize()
+          _ ← debug(s"start: ${startPoint + headSize}, remain: ${endPoint - startPoint - headSize - tailSize}")
+            headB    ← read(startPoint, headSize)
+            _        ← S.head(headB, to)
+            _ ← readBody(startPoint + headSize,
+                         coreConfig.fillerReadBufferSize.sizeInByte,
+                         endPoint - startPoint - headSize - tailSize)
+            tailB ← read(endPoint - tailSize, tailSize)
+            _     ← S.tail(tailB, to)
           } yield ()
-        // 1. read head
-        // 2. read body recursively
-        // 3. read tail
-        for {
-          headB ← read(startPoint, headSize)
-          _     ← S.head(headB, to)
-          _     ← readBody(startPoint + headSize, bufferSize, endPoint - startPoint - headSize - tailSize)
-          tailB ← read(endPoint - tailSize, tailSize)
-          _     ← S.tail(tailB, to)
-        } yield ()
 
-      } else throw new IOException(s"no key=$key found")
-    } yield ()
-    prog
-  }
+        } else throw new IOException(s"no key=$key found")
+      } yield ()
+      prog
+    }
 }

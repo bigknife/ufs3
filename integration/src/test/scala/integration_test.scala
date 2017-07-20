@@ -2,7 +2,8 @@ package ufs3
 package integration
 package test
 
-import java.io.{FileInputStream, InputStream}
+import java.io.{FileInputStream, FileOutputStream, InputStream, OutputStream}
+import java.security.MessageDigest
 
 import cats.Id
 import cats.data.{Coproduct, Kleisli}
@@ -17,12 +18,13 @@ import ufs3.kernel.block._
 import ufs3.kernel.fildex._
 import ufs3.kernel.filler._
 import sop._
-import ufs3.interpreter.sandwich.SandwichInInterpreter
+import ufs3.interpreter.sandwich.{SandwichInInterpreter, SandwichOutInterpreter}
 import ufs3.kernel.log.Log
-import ufs3.kernel.sandwich.SandwichIn
+import ufs3.kernel.sandwich.{SandwichIn, SandwichOut}
 import ufs3.log.interpreter.LogInterpreter
 
 import scala.language.higherKinds
+import scala.util.Random
 
 object TestFix {
   type App1[A]       = Coproduct[Block.Op, Filler.Op, A]
@@ -30,12 +32,15 @@ object TestFix {
   type StartupApp[A] = Coproduct[Fildex.Op, App2, A]
 
   type WriteApp[A] = Coproduct[SandwichIn.Op[InputStream, ?], StartupApp, A]
+  type ReadApp[A]  = Coproduct[SandwichOut.Op[OutputStream, ?], StartupApp, A]
 
   val bi  = BlockInterpreter()
   val fi  = FillerInterpreter()
   val fii = FildexInterpreter()
   val li  = LogInterpreter()
   val sii = SandwichInInterpreter()
+  val soi = SandwichOutInterpreter()
+
   // NT → NT
   def liftNT[F[_], G[_], H[_]](nt: NT[F, G])(implicit nt1: NT[G, H]): NT[F, H] = nt1 compose nt
 
@@ -59,6 +64,10 @@ object TestFix {
     def apply[A](fa: Kleisli[IO, SandwichInInterpreter.Config, A]): Kleisli[IO, UniConfig, A] =
       fa.local[UniConfig](_.sandwichInConfig)
   }
+  implicit val nt6 = new NT[Kleisli[IO, SandwichOutInterpreter.Config, ?], Kleisli[IO, UniConfig, ?]] {
+    def apply[A](fa: Kleisli[IO, SandwichOutInterpreter.Config, A]): Kleisli[IO, UniConfig, A] =
+      fa.local[UniConfig](_.sanwichOutConfig)
+  }
 
   val blockInterperter: NT[Block.Op, Kleisli[IO, UniConfig, ?]] =
     liftNT[Block.Op, Kleisli[IO, BlockInterpreter.Config, ?], Kleisli[IO, UniConfig, ?]](bi)
@@ -70,11 +79,16 @@ object TestFix {
     liftNT[Log.Op, Kleisli[IO, LogInterpreter.Config, ?], Kleisli[IO, UniConfig, ?]](li)
   val sandwichInInterpreter: NT[SandwichIn.Op[InputStream, ?], Kleisli[IO, UniConfig, ?]] =
     liftNT[SandwichIn.Op[InputStream, ?], Kleisli[IO, SandwichInInterpreter.Config, ?], Kleisli[IO, UniConfig, ?]](sii)
+  val sandwichOutInterpreter: NT[SandwichOut.Op[OutputStream, ?], Kleisli[IO, UniConfig, ?]] =
+    liftNT[SandwichOut.Op[OutputStream, ?], Kleisli[IO, SandwichOutInterpreter.Config, ?], Kleisli[IO, UniConfig, ?]](
+      soi)
 
   val interpreter
     : NT[StartupApp, Kleisli[IO, UniConfig, ?]] = fildexInterperter or (logInterperter or (blockInterperter or fillerInterperter))
 
   val writeAppInterpreter: NT[WriteApp, Kleisli[IO, UniConfig, ?]] = sandwichInInterpreter or interpreter
+
+  val readAppInterpreter: NT[ReadApp, Kleisli[IO, UniConfig, ?]] = sandwichOutInterpreter or interpreter
 
   trait UniConfig {
     def blockConfig: BlockInterpreter.Config   = new BlockInterpreter.Config {}
@@ -84,14 +98,18 @@ object TestFix {
     def sandwichInConfig: SandwichInInterpreter.Config = new SandwichInInterpreter.Config {
       def inputBufferSize: Int = 8192
     }
+    def sanwichOutConfig: SandwichOutInterpreter.Config = new SandwichOutInterpreter.Config {
+      def outputBufferSize: Long = 8192
+    }
   }
 
   val coreConfig = new CoreConfig {
     import Block.Size._
 
-    val idxBlockSize: Block.Size    = 2.GiB
-    val fillerBlockSize: Block.Size = 100.GiB
-    val fillerBlockPath: Block.Path = Block.Path("/Users/bigknife/Working/tmp/ufs3.filler")
+    def fillerReadBufferSize: Block.Size = 8.KiB
+    val idxBlockSize: Block.Size         = 2.GiB
+    val fillerBlockSize: Block.Size      = 100.GiB
+    val fillerBlockPath: Block.Path      = Block.Path("/Users/bigknife/Working/tmp/ufs3.filler")
   }
 
 }
@@ -114,24 +132,61 @@ object StartupTest {
 
 object WriteFileTest {
   import TestFix._
-  def test(): Unit = {
-
-    val key = "12345678901234567890123456789012"
-    val ins = new FileInputStream("/Users/bigknife/Working/tmp/test.jpg")
+  def test(times: Int): String = {
+    val random =
+      MessageDigest.getInstance("MD5").digest(Random.nextString(32).getBytes).map("%02x" format _).mkString("")
+    println(s"put file: $random start")
+    val start = System.currentTimeMillis()
+    val key   = random
+    val ins   = new FileInputStream("/Users/bigknife/Working/tmp/test.jpg")
     val app = for {
       ufs3 ← startup[WriteApp].run(coreConfig)
-      _    ← write[WriteApp, InputStream](key, ins.available().toLong, ins, ufs3).run(coreConfig)
-      _    ← shutdown[WriteApp](ufs3).run(coreConfig)
+      _ ← {
+        def run(c: Int): SOP[WriteApp, Unit] = {
+          if (c <= 0) SOP.pure[WriteApp, Unit](())
+          else {
+            for {
+              _ ← write[WriteApp, InputStream](key, ins.available().toLong, ins, ufs3).run(coreConfig)
+              _ ← run(c - 1)
+            } yield ()
+          }
+        }
+        run(times)
+      }
+      _ ← shutdown[WriteApp](ufs3).run(coreConfig)
     } yield ()
     app.foldMap(writeAppInterpreter).run(new UniConfig {}).unsafeRunSync()
-    println("WriteFileTest OK")
+    ins.close()
+    println(s"put file $random ok. spent: ${System.currentTimeMillis() - start} ms")
+    random
+  }
+}
+
+object ReadFileTest {
+  import TestFix._
+  def test(key: String): Unit = {
+    val out = new FileOutputStream("/Users/bigknife/Working/tmp/test_out.jpg")
+    val app = for {
+      ufs3 ← startup[ReadApp].run(coreConfig)
+      _    ← read[ReadApp, OutputStream](key, ufs3, out).run(coreConfig)
+    } yield ()
+    app.foldMap(readAppInterpreter).run(new UniConfig {}).unsafeRunSync()
   }
 }
 
 object TestSute {
   def main(args: Array[String]): Unit = {
-    StartupTest.test()
+    // startup , only run once
+    //StartupTest.test()
     println("----------------------")
-    WriteFileTest.test()
+    // run WriteFileTest.test()
+    // test write and read
+    //val key = WriteFileTest.test(1)
+
+    val key = "7335ee53fdad924fc74891f6ef1540f3"
+    //val key = "856318dfffccfb5847b73a26472637ac"
+
+    ReadFileTest.test(key)
+
   }
 }
