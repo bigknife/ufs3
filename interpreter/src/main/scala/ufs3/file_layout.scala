@@ -73,22 +73,37 @@ object Layout {
 trait FillerFileLayout { self ⇒
   import Layout._
   def magic: `4Bytes` = `4Bytes`(FillerFileLayout.HEAD_MAGIC)
-  def blockSize: `8Bytes`
-  def tailPosition: `8Bytes`
-  def version: `4Bytes`
-  def versionPos: `8Bytes`
+  val blockSize: `8Bytes`
+  val tailPosition: `8Bytes`
+  val version: `4Bytes`
+  val versionPos: `8Bytes`
 
   def head: `32Bytes` = `32Bytes`(
     (magic ++ blockSize ++ tailPosition ++ version ++ versionPos).bytes
   )
 
-  def tailPosition(nv: `8Bytes`): FillerFileLayout = new FillerFileLayout {
-    def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = self.blockSize
-    def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = nv
-    def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = self.version
-    def versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes`   = self.versionPos
+  def tailPosition(p: Long): FillerFileLayout = new FillerFileLayout {
+    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = self.blockSize
+    val tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = p.`8Bytes`
+    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = self.version
+    val versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes`   = self.versionPos
   }
 
+  def version(v: Int): FillerFileLayout = new FillerFileLayout {
+    import Layout._
+    val tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.tailPosition
+    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = v.`4Bytes`
+    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.blockSize
+    val versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.versionPos
+  }
+
+  def versionPos(p: Long): FillerFileLayout = new FillerFileLayout {
+    import Layout._
+    val tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.tailPosition
+    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = self.version
+    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.blockSize
+    val versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = p.`8Bytes`
+  }
 }
 
 object FillerFileLayout {
@@ -104,10 +119,10 @@ object FillerFileLayout {
       import Layout._
       // magic is constant
 
-      def blockSize: Layout.Long_Bytes    = _blockSize.`8Bytes`
-      def tailPosition: Layout.Long_Bytes = _tailPosition.`8Bytes`
-      def version: Layout.Int_Bytes       = _version.`4Bytes`
-      def versionPos: Layout.Long_Bytes   = _versionPos.`8Bytes`
+      val blockSize: Layout.Long_Bytes    = _blockSize.`8Bytes`
+      val tailPosition: Layout.Long_Bytes = _tailPosition.`8Bytes`
+      val version: Layout.Int_Bytes       = _version.`4Bytes`
+      val versionPos: Layout.Long_Bytes   = _versionPos.`8Bytes`
     }
 
   import Layout._
@@ -121,34 +136,34 @@ object FillerFileLayout {
     val _versionPosition = bytes.slice(24, 32)
 
     new FillerFileLayout {
-      def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = _tailPosition.`8Bytes`
-      def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = _version.`4Bytes`
-      def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = _blockSize.`8Bytes`
-      def versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes`   = _versionPosition.`8Bytes`
+      val tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = _tailPosition.`8Bytes`
+      val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = _version.`4Bytes`
+      val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = _blockSize.`8Bytes`
+      val versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes`   = _versionPosition.`8Bytes`
     }
   }
 }
 
 trait FildexFileLayout {outter ⇒
   import Layout._
-  def magic: `4Bytes` = `4Bytes`(FillerFileLayout.HEAD_SIZE)
-  def blockSize: `8Bytes`
-  def tailPosition: `8Bytes`
-  def version: `4Bytes`
+  def magic: `4Bytes` = `4Bytes`(FildexFileLayout.HEAD_MAGIC)
+  val blockSize: `8Bytes`
+  val tailPosition: `8Bytes`
+  val version: `4Bytes`
 
   def head: `24Bytes` = `24Bytes`(
     (magic ++ blockSize ++ tailPosition ++ version).bytes
   )
 
   def version(v: Int): FildexFileLayout = new FildexFileLayout {
-    def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.tailPosition
-    def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = v.`4Bytes`
-    def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.blockSize
+    val tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.tailPosition
+    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = v.`4Bytes`
+    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.blockSize
   }
   def tailPosition(p: Long): FildexFileLayout = new FildexFileLayout {
-    def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = p.`8Bytes`
-    def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = outter.version
-    def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.blockSize
+    val tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = p.`8Bytes`
+    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = outter.version
+    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.blockSize
   }
 }
 
@@ -160,9 +175,9 @@ object FildexFileLayout {
   def apply(_blockSize: Long, _tailPosition: Long = HEAD_SIZE, _version: Int = 0): FildexFileLayout =
     new FildexFileLayout {
       import Layout._
-      def tailPosition: Layout.`8Bytes` = _tailPosition.`8Bytes`
-      def version: Layout.`4Bytes`      = _version.`4Bytes`
-      def blockSize: Layout.`8Bytes`    = _blockSize.`8Bytes`
+      val tailPosition: Layout.`8Bytes` = _tailPosition.`8Bytes`
+      val version: Layout.`4Bytes`      = _version.`4Bytes`
+      val blockSize: Layout.`8Bytes`    = _blockSize.`8Bytes`
     }
 
   def resolveBytes(bytes: Bytes): FildexFileLayout = {
@@ -174,9 +189,9 @@ object FildexFileLayout {
     val _tailPosition = bytes.slice(12, 20)
     val _version      = bytes.slice(20, 24)
     new FildexFileLayout {
-      def tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = _tailPosition.`8Bytes`
-      def version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = _version.`4Bytes`
-      def blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = _blockSize.`8Bytes`
+      val tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = _tailPosition.`8Bytes`
+      val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = _version.`4Bytes`
+      val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = _blockSize.`8Bytes`
     }
   }
 }
@@ -187,8 +202,8 @@ object IdxLayout {
   def resolveBytes(bytes: Array[Byte]): Idx = {
     require(bytes.length == SIZE, s"fildex index key item should be $SIZE Bytes")
     val key = new String(bytes.take(32), "utf-8")
-    val startPoint = bytes.slice(32, 8).`8Bytes`.longValue
-    val endPoint = bytes.slice(40, 8).`8Bytes`.longValue
+    val startPoint = bytes.slice(32, 40).`8Bytes`.longValue
+    val endPoint = bytes.slice(40, 48).`8Bytes`.longValue
     Idx(key, startPoint, endPoint)
   }
 }

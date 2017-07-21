@@ -12,7 +12,7 @@ package filler
 
 import scala.language.higherKinds
 import scala.language.implicitConversions
-import block.Block._
+import block.Block.BlockFile
 import cats.free.Inject
 import sop._
 
@@ -24,22 +24,23 @@ trait Filler[F[_]] {
   def close(ff: FillerFile): Par[F, Unit]
   // allocate space for new sandwich, return the startpoint
   def startAppend(ff: FillerFile): Par[F, Long]
-  def endAppend(ff: FillerFile, endPosition: Long): Par[F, FillerFile]
+  def endAppend(ff: FillerFile, startPosition: Long, endPosition: Long): Par[F, FillerFile]
 }
 object Filler {
   sealed trait Op[A]
-  final case class Init(bf: BlockFile)                          extends Op[FillerFile]
-  final case class Check(bf: BlockFile)                         extends Op[FillerFile]
-  final case class Close(ff: FillerFile)                        extends Op[Unit]
-  final case class StartAppend(ff: FillerFile)                  extends Op[Long]
-  final case class EndAppend(ff: FillerFile, endPosition: Long) extends Op[FillerFile]
+  final case class Init(bf: BlockFile)                                               extends Op[FillerFile]
+  final case class Check(bf: BlockFile)                                              extends Op[FillerFile]
+  final case class Close(ff: FillerFile)                                             extends Op[Unit]
+  final case class StartAppend(ff: FillerFile)                                       extends Op[Long]
+  final case class EndAppend(ff: FillerFile, startPosition: Long, endPosition: Long) extends Op[FillerFile]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Filler[F] {
-    def init(bf: BlockFile): Par[F, FillerFile]                    = liftPar_T[Op, F, FillerFile](Init(bf))
-    def check(bf: BlockFile): Par[F, FillerFile]                   = liftPar_T[Op, F, FillerFile](Check(bf))
-    def close(ff: FillerFile): Par[F, Unit]                        = liftPar_T[Op, F, Unit](Close(ff))
-    def startAppend(ff: FillerFile): Par[F, Long]                  = liftPar_T[Op, F, Long](StartAppend(ff))
-    def endAppend(ff: FillerFile, endPosition: Long): Par[F, FillerFile] = liftPar_T[Op, F, FillerFile](EndAppend(ff, endPosition))
+    def init(bf: BlockFile): Par[F, FillerFile]   = liftPar_T[Op, F, FillerFile](Init(bf))
+    def check(bf: BlockFile): Par[F, FillerFile]  = liftPar_T[Op, F, FillerFile](Check(bf))
+    def close(ff: FillerFile): Par[F, Unit]       = liftPar_T[Op, F, Unit](Close(ff))
+    def startAppend(ff: FillerFile): Par[F, Long] = liftPar_T[Op, F, Long](StartAppend(ff))
+    def endAppend(ff: FillerFile, startPosition: Long, endPosition: Long): Par[F, FillerFile] =
+      liftPar_T[Op, F, FillerFile](EndAppend(ff, startPosition, endPosition))
   }
 
   implicit def to[F[_]](implicit I: Inject[Op, F]): Filler[F] = new To[F]
@@ -51,14 +52,14 @@ object Filler {
     def check(blockFile: BlockFile): M[FillerFile]
     def close(ff: FillerFile): M[Unit]
     def startAppend(ff: FillerFile): M[Long]
-    def endAppend(ff: FillerFile, endPosition: Long): M[FillerFile]
+    def endAppend(ff: FillerFile, startPosition: Long, endPosition: Long): M[FillerFile]
 
     override def apply[A](fa: Op[A]): M[A] = fa match {
-      case Init(bf)                   ⇒ init(bf)
-      case Check(bf)                  ⇒ check(bf)
-      case Close(ff)                  ⇒ close(ff)
-      case StartAppend(ff)            ⇒ startAppend(ff)
-      case EndAppend(ff, endPosition) ⇒ endAppend(ff, endPosition)
+      case Init(bf)                                  ⇒ init(bf)
+      case Check(bf)                                 ⇒ check(bf)
+      case Close(ff)                                 ⇒ close(ff)
+      case StartAppend(ff)                           ⇒ startAppend(ff)
+      case EndAppend(ff, startPosition, endPosition) ⇒ endAppend(ff, startPosition, endPosition)
     }
   }
 

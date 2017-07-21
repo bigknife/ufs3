@@ -27,12 +27,14 @@ final class RandomFillerFile(private val layout: FillerFileLayout, val underlyin
   // current tail position
   def tailPos: Long = layout.tailPosition.longValue
 
+  def isFull: Boolean = layout.tailPosition.longValue >= underlying.size()
+
   // set current tail position
   def tailPos(pos: Long): RandomFillerFile = {
-    import Layout._
-    val newLayout = layout.tailPosition(pos.`8Bytes`)
+    val newLayout = layout.tailPosition(pos)
     RandomFillerFile(newLayout, underlying)
   }
+
 
   // refresh head in the file
   def refreshHead(): RandomFillerFile = {
@@ -44,6 +46,15 @@ final class RandomFillerFile(private val layout: FillerFileLayout, val underlyin
   // get current version
   def version: Int = layout.version.intValue
 
+  def version(newVewsion: Int): RandomFillerFile = {
+    val newLayout = layout.version(newVewsion)
+    RandomFillerFile(newLayout, underlying)
+  }
+
+  def versionPos(p: Long): RandomFillerFile = {
+    val newLayout = layout.versionPos(p)
+    RandomFillerFile(newLayout, underlying)
+  }
 
 }
 

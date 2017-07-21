@@ -36,7 +36,7 @@ lazy val core = (project in file("core"))
   .settings(commonSettings: _*)
 
 lazy val interpreter = (project in file("interpreter"))
-  .dependsOn(core)
+  .dependsOn(kernel)
   .settings(commonSettings: _*)
   .settings(
     resolvers += "BarcsysRepo" at "https://repox.barcsys.com/",
@@ -47,3 +47,8 @@ lazy val interpreter = (project in file("interpreter"))
     libraryDependencies += "org.scalactic"     %% "scalactic"              % "3.0.1",
     libraryDependencies += "org.scalatest"     %% "scalatest"              % "3.0.1" % "test"
   )
+
+lazy val integration = (project in file("integration"))
+  .dependsOn(core)
+  .dependsOn(interpreter)
+  .settings(commonSettings: _*)

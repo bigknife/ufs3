@@ -51,8 +51,12 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
         s"the block file lenght should be greater than ${FillerFileLayout.HEAD_SIZE}")
 
       val headBytes = {
-        blockFile.seek(0); blockFile.read(FillerFileLayout.HEAD_SIZE)
-      }.array()
+        blockFile.seek(0)
+        val bb = blockFile.read(FillerFileLayout.HEAD_SIZE)
+        val bytes = new Array[Byte](FillerFileLayout.HEAD_SIZE.toInt)
+        bb.get(bytes)
+        bytes
+      }
       // the magic check is in the `resoveBytes`
       val layout = FillerFileLayout.resolveBytes(headBytes)
       RandomFillerFile(layout = layout, underlying = blockFile)
@@ -63,14 +67,15 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
   def startAppend(ff: Filler.FillerFile): Kleisli[IO, FillerInterpreter.Config, Long] = Kleisli { config ⇒
     IO {
       import RandomFillerFile._
-      ff.tailPos
+      if (ff.isFull) throw new IllegalAccessException("the filler file is full")
+      else ff.tailPos
     }
   }
 
-  def endAppend(ff: Filler.FillerFile, endPosition: Long): Kleisli[IO, FillerInterpreter.Config, FillerFile] = Kleisli {config ⇒
+  def endAppend(ff: Filler.FillerFile, startPosition: Long, endPosition: Long): Kleisli[IO, FillerInterpreter.Config, FillerFile] = Kleisli {config ⇒
     IO {
       import RandomFillerFile._
-      ff.tailPos(endPosition).refreshHead()
+      ff.tailPos(endPosition).version(ff.version + 1).versionPos(startPosition).refreshHead()
     }
   }
 }

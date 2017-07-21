@@ -41,8 +41,11 @@ trait FildexInterpreter extends Fildex.Handler[Kleisli[IO, FildexInterpreter.Con
 
         val headBytes = {
           ff.seek(0)
-          ff.read(FildexFileLayout.HEAD_SIZE)
-        }.array()
+          val bb = ff.read(FildexFileLayout.HEAD_SIZE)
+          val bytes = new Array[Byte](FildexFileLayout.HEAD_SIZE.toInt)
+          bb.get(bytes)
+          bytes
+        }
 
         val layout = FildexFileLayout.resolveBytes(headBytes)
 
@@ -56,8 +59,11 @@ trait FildexInterpreter extends Fildex.Handler[Kleisli[IO, FildexInterpreter.Con
     IO {
       val headBytes = {
         ff.seek(0)
-        ff.read(FildexFileLayout.HEAD_SIZE)
-      }.array()
+        val bb = ff.read(FildexFileLayout.HEAD_SIZE)
+        val bytes = new Array[Byte](FildexFileLayout.HEAD_SIZE.toInt)
+        bb.get(bytes)
+        bytes
+      }
       val layout = FildexFileLayout.resolveBytes(headBytes)
       RandomFildexFile(layout, ff).loadIndex()
     }
@@ -90,4 +96,6 @@ trait FildexInterpreter extends Fildex.Handler[Kleisli[IO, FildexInterpreter.Con
 
 object FildexInterpreter {
   trait Config {}
+
+  def apply(): FildexInterpreter = new FildexInterpreter {}
 }

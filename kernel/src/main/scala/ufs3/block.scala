@@ -167,8 +167,14 @@ object Block {
       def B: Size = new Size {
         override def sizeInByte: Long = ev.toLong(a)
       }
+      def KiB: Size = new Size {
+        def sizeInByte: Long = ev.toLong(a) * 1024
+      }
       def MiB: Size = new Size {
-        override def sizeInByte: Long = ev.toLong(a) * 1024
+        override def sizeInByte: Long = ev.toLong(a) * 1024 * 1024
+      }
+      def GiB: Size = new Size {
+        def sizeInByte: Long = ev.toLong(a) * 1024 * 1024 * 1024
       }
     }
 
