@@ -1,4 +1,6 @@
 import sbt.Keys._
+import sbtassembly.AssemblyPlugin._
+import sbtassembly.AssemblyPlugin.autoImport._
 
 //moodify your orgnization and version
 lazy val commonSettings = Seq(
@@ -52,3 +54,10 @@ lazy val integration = (project in file("integration"))
   .dependsOn(core)
   .dependsOn(interpreter)
   .settings(commonSettings: _*)
+.settings(
+  libraryDependencies += "com.github.scopt" %% "scopt" % "3.6.0",
+
+  assemblyOption in assembly := (assemblyOption in assembly).value.copy(prependShellScript = Some(defaultShellScript)),
+  mainClass in assembly := Some("ufs3.integration.Main"),
+  assemblyJarName := s"ufs3.jar"
+)
