@@ -27,6 +27,8 @@ final class RandomFillerFile(private val layout: FillerFileLayout, val underlyin
   // current tail position
   def tailPos: Long = layout.tailPosition.longValue
 
+  def isFull: Boolean = layout.tailPosition.longValue >= underlying.size()
+
   // set current tail position
   def tailPos(pos: Long): RandomFillerFile = {
     val newLayout = layout.tailPosition(pos)

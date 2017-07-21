@@ -148,10 +148,8 @@ package object core {
   // 2. shutdown fildex file
   // 3. shutdown block
   // 4. ok
-  def shutdown[F[_]](ufs3: UFS3)(implicit B: Block[F],
-                                 F: Filler[F],
-                                 FI: Fildex[F],
-                                 L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
+  def shutdown[F[_]](
+      ufs3: UFS3)(implicit B: Block[F], F: Filler[F], FI: Fildex[F], L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
     Kleisli { coreConfig ⇒
       import L._
       val prog: Id[SOP[F, Unit]] = for {

@@ -3,6 +3,7 @@ package integration
 package test
 
 import java.io.{FileInputStream, FileOutputStream, InputStream, OutputStream}
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 
 import cats.Id
@@ -107,8 +108,8 @@ object TestFix {
     import Block.Size._
 
     def fillerReadBufferSize: Block.Size = 8.KiB
-    val idxBlockSize: Block.Size         = 2.MiB
-    val fillerBlockSize: Block.Size      = 100.MiB
+    val idxBlockSize: Block.Size         = 2.GiB
+    val fillerBlockSize: Block.Size      = 100.GiB
     val fillerBlockPath: Block.Path      = Block.Path("/Users/bigknife/Working/tmp/ufs3.filler")
   }
 
@@ -132,33 +133,38 @@ object StartupTest {
 
 object WriteFileTest {
   import TestFix._
-  def test(times: Int): String = {
-    val random =
-      MessageDigest.getInstance("MD5").digest(Random.nextString(32).getBytes).map("%02x" format _).mkString("")
-    println(s"put file: $random start")
+  def test(times: Int): Unit = {
+
     val start = System.currentTimeMillis()
-    val key   = random
-    val ins   = new FileInputStream("/Users/bigknife/Working/tmp/test.jpg")
+    def key(): String   = {
+      val dst = Random.nextString(32).getBytes()
+      val str = MessageDigest.getInstance("MD5").digest(dst).map("%02x" format _).mkString("")
+      str
+    }
+    def newIns()   = new FileInputStream("/Users/bigknife/Working/tmp/test.jpg")
     val app = for {
       ufs3 ← startup[WriteApp].run(coreConfig)
-      _ ← {
-        def run(c: Int): SOP[WriteApp, Unit] = {
-          if (c <= 0) SOP.pure[WriteApp, Unit](())
+      allSize ← {
+        def run(c: Int): SOP[WriteApp, Long] = {
+          if (c <= 0) SOP.pure[WriteApp, Long](0)
           else {
             for {
-              _ ← write[WriteApp, InputStream](key, ins.available().toLong, ins, ufs3).run(coreConfig)
-              _ ← run(c - 1)
-            } yield ()
+              ins ← SOP.pure[WriteApp, InputStream](newIns())
+              size ← SOP.pure[WriteApp, Int] (ins.available())
+              _ ← write[WriteApp, InputStream](key(), ins.available().toLong, ins, ufs3).run(coreConfig)
+              _ ← SOP.pure[WriteApp, Unit]({println(s"writed : $c"); ins.close()})
+              writedSize ← run(c - 1)
+            } yield size + writedSize
           }
         }
         run(times)
       }
       _ ← shutdown[WriteApp](ufs3).run(coreConfig)
-    } yield ()
-    app.foldMap(writeAppInterpreter).run(new UniConfig {}).unsafeRunSync()
-    ins.close()
-    println(s"put file $random ok. spent: ${System.currentTimeMillis() - start} ms")
-    random
+    } yield allSize
+    val allSize = app.foldMap(writeAppInterpreter).run(new UniConfig {}).unsafeRunSync()
+    val spent = System.currentTimeMillis() - start
+    println(s"put $allSize bytes ok. spent: $spent ms, bps: ${allSize / spent.toDouble}")
+
   }
 }
 
@@ -181,13 +187,14 @@ object TestSute {
     //println("----------------------")
     // run WriteFileTest.test()
     // test write and read
-    val key = WriteFileTest.test(1)
-    println("--------------")
+    //val key = WriteFileTest.test(1)
+    WriteFileTest.test(100000)
+    //println("--------------")
     //println(key)
-    //val key = "7335ee53fdad924fc74891f6ef1540f3"
-    //val key = "856318dfffccfb5847b73a26472637ac"
+    //val key = "4c8611042cca11744dc4c18ca6061be3"
+    //val key = "1eaa2913c84c5ee721bb686a25e23726"
     //val key = "acb9ac72b5027d97c1bf83c3c138cc6d"
-    ReadFileTest.test(key)
+    //ReadFileTest.test(key)
 
   }
 }

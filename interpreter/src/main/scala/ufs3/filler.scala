@@ -67,7 +67,8 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
   def startAppend(ff: Filler.FillerFile): Kleisli[IO, FillerInterpreter.Config, Long] = Kleisli { config ⇒
     IO {
       import RandomFillerFile._
-      ff.tailPos
+      if (ff.isFull) throw new IllegalAccessException("the filler file is full")
+      else ff.tailPos
     }
   }
 
