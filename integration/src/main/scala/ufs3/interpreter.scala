@@ -76,5 +76,4 @@ package object interpreter {
   val sandwichOutInterpreter: NT[SandwichOut.Op[OutputStream, ?], Kleisli[IO, UniConfig, ?]] =
     liftNT[SandwichOut.Op[OutputStream, ?], Kleisli[IO, SandwichOutInterpreter.Config, ?], Kleisli[IO, UniConfig, ?]](
       soi)
-
 }

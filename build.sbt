@@ -59,5 +59,5 @@ lazy val integration = (project in file("integration"))
 
   assemblyOption in assembly := (assemblyOption in assembly).value.copy(prependShellScript = Some(defaultShellScript)),
   mainClass in assembly := Some("ufs3.integration.Main"),
-  assemblyJarName := s"ufs3.jar"
+  assemblyJarName := s"ufs3"
 )

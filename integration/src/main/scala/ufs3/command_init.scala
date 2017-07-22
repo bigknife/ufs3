@@ -9,7 +9,6 @@ package ufs3
 package integration
 package command
 
-import cats.arrow.FunctionK
 import cats.data.{Coproduct, Kleisli}
 import cats.effect.IO
 import sop._

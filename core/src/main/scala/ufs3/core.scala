@@ -52,6 +52,37 @@ package object core {
     def fillerReadBufferSize: Block.Size
   }
 
+  private def open[F[_]](mode: Block.FileMode)(implicit B: Block[F],
+                         F: Filler[F],
+                         FI: Fildex[F],
+                         L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, UFS3]] = {
+    Kleisli {config ⇒
+      val path = config.fillerBlockPath
+      val pathString = path.file.value.getAbsolutePath
+      val prog: Id[SOP[F, UFS3]] = for {
+        being ← B.existed(path)
+        _ ← if (! being) throw new IOException(s"file not exists: $pathString") else SOP.pure[F, Unit](())
+        bf ← B.open(path, mode)
+        bfi ← B.open(path.indexPath, mode)
+        ff ← F.check(bf)
+        idxOk ← FI.check(bfi, ff)
+        fif ← if (idxOk) FI.load(bfi) else throw new IllegalStateException("fildex is not legal, please repair it")
+      } yield UFS3(bf, ff, fif)
+      prog
+    }
+  }
+
+  def openForWrite[F[_]](implicit B: Block[F],
+                 F: Filler[F],
+                 FI: Fildex[F],
+                 L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, UFS3]] = open(FileMode.ReadWrite)
+
+  def openForRead[F[_]](implicit B: Block[F],
+                         F: Filler[F],
+                         FI: Fildex[F],
+                         L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, UFS3]] = open(FileMode.ReadOnly)
+
+
   // startup ufs3
   // 1. open or create a block
   // 2. init or check the block to a filler file
