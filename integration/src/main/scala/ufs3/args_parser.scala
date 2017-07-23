@@ -27,7 +27,9 @@ package object parser {
       logLevel: String = "debug",
       putLocalFile: File = null,
       getLocalFile: File = null,
-      getKey: String = null
+      getKey: String = null,
+      listLimit: Int = -1,
+      listOrder: String = "desc"
   ) {
     def coreConfig: CoreConfig = new CoreConfig {
       import ufs3.kernel.block.Block.Size._
@@ -69,10 +71,11 @@ package object parser {
 
   val parser = new scopt.OptionParser[Args](progName) {
 
-    def logOpt: OptionDef[String, Args] = opt[String]("log-level")
-      .abbr("ll")
-      .text("log level: debug|info|warn|error, if not same as this, it should be the default: debug")
-      .action((s, c) ⇒ c.copy(logLevel = s))
+    def logOpt: OptionDef[String, Args] =
+      opt[String]("log-level")
+        .abbr("ll")
+        .text("log level: debug|info|warn|error, if not same as this, it should be the default: debug")
+        .action((s, c) ⇒ c.copy(logLevel = s))
     def fillerFileOpt(name: String, abbrName: String): OptionDef[String, Args] =
       opt[String](name)
         .abbr(abbrName)
@@ -114,6 +117,7 @@ package object parser {
         fillerFileOpt("out", "o"),
         logOpt
       )
+
     cmd("get")
       .action((_, c) ⇒ c.copy(cmd = "get"))
       .text("get: read file from ufs3 with key, and output to somewhere")
@@ -126,9 +130,26 @@ package object parser {
           .required()
           .abbr("f")
           .text("local file path, should be a valid local file")
-          .validate(x ⇒ if (!x.exists()) Right(()) else Left(s"file $x exists, please use another not existed file path"))
+          .validate(x ⇒
+            if (!x.exists()) Right(()) else Left(s"file $x exists, please use another not existed file path"))
           .action((f, c) ⇒ c.copy(getLocalFile = f)),
         fillerFileOpt("in", "i"),
+        logOpt
+      )
+
+    cmd("list")
+      .abbr("ls")
+      .action((_, c) ⇒ c.copy(cmd = "list"))
+      .text("list: list the file in ufs3 instance")
+      .children(
+        opt[Int]("limit")
+          .text("limit the count of result")
+          .action((l, c) ⇒ c.copy(listLimit = l)),
+        opt[String]("order")
+          .text("the list result order")
+          .validate(x ⇒ if (x.equals("asc") || x.equals("desc")) Right(()) else Left("order should be `asc` or `desc`"))
+          .action((o, c) ⇒ c.copy(listOrder = o)),
+        fillerFileOpt("file", "f"),
         logOpt
       )
   }

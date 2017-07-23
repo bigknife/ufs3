@@ -82,6 +82,7 @@ package object core {
                          FI: Fildex[F],
                          L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, UFS3]] = open(FileMode.ReadOnly)
 
+  //todo list idx asc or desc with limited count
 
   // startup ufs3
   // 1. open or create a block
