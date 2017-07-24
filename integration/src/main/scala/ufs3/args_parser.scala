@@ -29,7 +29,8 @@ package object parser {
       getLocalFile: File = null,
       getKey: String = null,
       listLimit: Int = -1,
-      listOrder: String = "desc"
+      listOrder: String = "desc",
+      freeSpaceUnit: String = "M"
   ) {
     def coreConfig: CoreConfig = new CoreConfig {
       import ufs3.kernel.block.Block.Size._
@@ -154,5 +155,30 @@ package object parser {
         fillerFileOpt("file", "f"),
         logOpt
       )
+
+    cmd("free")
+        .text("free: view the free space")
+          .children(
+            cmd("block")
+              .text("block: view the free space of block")
+              .action((_, c) ⇒ c.copy(cmd = "free-block"))
+              .children(
+                opt[String]("with-unit")
+                    .text("the unit for showing free space (G|M|K), default is M")
+                  .action((u, c) ⇒ c.copy(freeSpaceUnit = u)),
+                fillerFileOpt("file", "f"),
+                logOpt
+              ),
+            cmd("idx")
+              .text("idx: view the free space of index")
+              .action((_, c) ⇒ c.copy(cmd = "free-idx"))
+              .children(
+                opt[String]("with-unit")
+                  .text("the unit for showing free space (G|M|K), default is M")
+                  .action((u, c) ⇒ c.copy(freeSpaceUnit = u)),
+                fillerFileOpt("file", "f"),
+                logOpt
+              )
+          )
   }
 }

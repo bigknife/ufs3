@@ -101,6 +101,11 @@ trait FildexInterpreter extends Fildex.Handler[Kleisli[IO, FildexInterpreter.Con
       fildex.query(limit, order)
     }
   }
+
+  def freeSpace(fi: FildexFile): Kleisli[IO, FildexInterpreter.Config, Long] = Kleisli {config ⇒ IO {
+    import RandomFildexFile._
+    fi.freeSpace
+  }}
 }
 
 object FildexInterpreter {

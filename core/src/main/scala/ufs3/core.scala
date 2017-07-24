@@ -82,7 +82,30 @@ package object core {
                         FI: Fildex[F],
                         L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, UFS3]] = open(FileMode.ReadOnly)
 
-  //todo list idx asc or desc with limited count
+  def freeSpaceOfFiller[F[_]](implicit B: Block[F],
+                              F: Filler[F],
+                              FI: Fildex[F],
+                              L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Long]] = {
+    openForRead[F].andThen[SOP[F, Long]]((x: SOP[F, UFS3]) ⇒ {
+      for {
+        ufs3 ← x
+        l ← F.freeSpace(ufs3.fillerFile.get())
+      } yield l
+    })
+  }
+
+  def freeSpaceOfFildex[F[_]](implicit B: Block[F],
+                              F: Filler[F],
+                              FI: Fildex[F],
+                              L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Long]] = {
+    openForRead[F].andThen[SOP[F, Long]]((x: SOP[F, UFS3]) ⇒ {
+      for {
+        ufs3 ← x
+        l ← FI.freeSpace(ufs3.fildexFile.get())
+      } yield l
+    })
+  }
+
   def list[F[_]](limit: Int, order: String)(implicit B: Block[F],
                                             F: Filler[F],
                                             FI: Fildex[F],

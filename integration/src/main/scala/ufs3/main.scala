@@ -96,6 +96,23 @@ object Main {
             log.error(t.getMessage)
         }
 
+      case Some(x) if x.cmd == "free-block" ⇒
+        initLog4j(x.logLevel)
+        FreeCommand.runFreeSpaceOfFillerProg(x.coreConfig, x.freeSpaceUnit) match {
+          case Success(_) ⇒
+          case Failure(t) ⇒
+            log.debug(s"calculate free space for block failed", t)
+            log.error(t.getMessage)
+        }
+
+      case Some(x) if x.cmd == "free-idx" ⇒
+        initLog4j(x.logLevel)
+        FreeCommand.runFreeSpaceOfFildexProg(x.coreConfig, x.freeSpaceUnit) match {
+          case Success(_) ⇒
+          case Failure(t) ⇒
+            log.debug(s"calculate free space for index failed", t)
+            log.error(t.getMessage)
+        }
 
       case Some(_) ⇒ System.err.println("please re-run ufs with --help or -h: ufs3 --help")
       case _       ⇒ //println("please run with help command: ufs3 help")

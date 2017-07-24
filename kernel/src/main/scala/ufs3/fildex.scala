@@ -33,6 +33,7 @@ trait Fildex[F[_]] {
   def close(bf: FildexFile): Par[F, Unit]
   def fetch(key: String, fildex: FildexFile): Par[F, Option[Idx]]
   def query(limit: Int, order: Order, fildex: FildexFile): Par[F, Vector[Idx]]
+  def freeSpace(fi: FildexFile): Par[F, Long]
 }
 
 object Fildex {
@@ -54,6 +55,7 @@ object Fildex {
   final case class Close(bf: FildexFile)                               extends Op[Unit]
   final case class Fetch(key: String, fildex: FildexFile)              extends Op[Option[Idx]]
   final case class Query(limit: Int, order: Order, fildex: FildexFile) extends Op[Vector[Idx]]
+  final case class FreeSpace(fi: FildexFile) extends Op[Long]
 
   final case class Append(bf: FildexFile, idx: Idx) extends Op[FildexFile]
 
@@ -67,6 +69,7 @@ object Fildex {
     def query(limit: Int, order: Order, fildex: FildexFile): Par[F, Vector[Idx]] =
       liftPar_T[Op, F, Vector[Idx]](Query(limit, order, fildex))
     def append(bf: FildexFile, idx: Idx): Par[F, FildexFile] = liftPar_T[Op, F, FildexFile](Append(bf, idx))
+    def freeSpace(fi: FildexFile): Par[F, Long] = liftPar_T[Op, F, Long](FreeSpace(fi))
   }
   implicit def to[F[_]](implicit I: Inject[Op, F]): Fildex[F] = new To[F]
 
@@ -82,6 +85,7 @@ object Fildex {
     def close(bf: FildexFile): M[Unit]
     def fetch(key: String, fildex: FildexFile): M[Option[Idx]]
     def query(limit: Int, order: Order, fildex: FildexFile): M[Vector[Idx]]
+    def freeSpace(fi: FildexFile): M[Long]
 
     def apply[A](fa: Op[A]): M[A] = fa match {
       case Check(bf, filler)           ⇒ check(bf, filler)
@@ -92,6 +96,7 @@ object Fildex {
       case Append(bf, idx)             ⇒ append(bf, idx)
       case Fetch(key, fildex)          ⇒ fetch(key, fildex)
       case Query(limit, order, fildex) ⇒ query(limit, order, fildex)
+      case FreeSpace(fi) ⇒ freeSpace(fi)
     }
   }
 

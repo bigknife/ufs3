@@ -33,6 +33,8 @@ final class RandomFildexFile(private val layout: FildexFileLayout,
     write(layout.head.byteBuffer)
   }
 
+  def freeSpace: Long = underlying.size() - layout.tailPosition.longValue
+
   def fetchIdx(key: String): Option[Idx] = indexMap.get(key)
 
   // append
