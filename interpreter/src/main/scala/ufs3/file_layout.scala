@@ -169,7 +169,7 @@ trait FildexFileLayout {outter ⇒
 
 object FildexFileLayout {
   val HEAD_MAGIC: Array[Byte] = "FILD".getBytes("iso8859_1")
-  val HEAD_SIZE: Long         = 24
+  val HEAD_SIZE: Long         = 24L
   import Layout._
 
   def apply(_blockSize: Long, _tailPosition: Long = HEAD_SIZE, _version: Int = 0): FildexFileLayout =
