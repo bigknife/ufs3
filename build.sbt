@@ -46,6 +46,7 @@ lazy val interpreter = (project in file("interpreter"))
     libraryDependencies += "org.reactivemongo" %% "reactivemongo"          % "0.11.14",
     libraryDependencies += "io.spray"          % "spray-json_2.11"         % "1.3.3",
     libraryDependencies += "com.barcsys"       %% "barcsys_tcp_connection" % "1.0.10",
+    libraryDependencies += "pharaoh"           %% "pharaoh"                % "0.0.1",
     libraryDependencies += "org.scalactic"     %% "scalactic"              % "3.0.1",
     libraryDependencies += "org.scalatest"     %% "scalatest"              % "3.0.1" % "test"
   )
@@ -54,10 +55,10 @@ lazy val integration = (project in file("integration"))
   .dependsOn(core)
   .dependsOn(interpreter)
   .settings(commonSettings: _*)
-.settings(
-  libraryDependencies += "com.github.scopt" %% "scopt" % "3.6.0",
-
-  assemblyOption in assembly := (assemblyOption in assembly).value.copy(prependShellScript = Some(defaultShellScript)),
-  mainClass in assembly := Some("ufs3.integration.Main"),
-  assemblyJarName := s"ufs3"
-)
+  .settings(
+    libraryDependencies += "com.github.scopt" %% "scopt" % "3.6.0",
+    assemblyOption in assembly := (assemblyOption in assembly).value
+      .copy(prependShellScript = Some(defaultShellScript)),
+    mainClass in assembly := Some("ufs3.integration.Main"),
+    assemblyJarName := s"ufs3"
+  )
