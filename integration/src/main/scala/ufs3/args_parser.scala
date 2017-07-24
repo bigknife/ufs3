@@ -81,9 +81,11 @@ package object parser {
         .abbr(abbrName)
         .text("the block file path, default is current ./ufs3.filler")
         .action((s, c) ⇒ c.copy(file = s))
-
+    version("version").abbr("v").text("print version of current ufs3")
     head(progName, ver)
+
     help("help").abbr("h").text("prints this usage text")
+
     cmd("init")
       .action((_, c) ⇒ c.copy(cmd = "init"))
       .text("init: create a block file for ufs3")

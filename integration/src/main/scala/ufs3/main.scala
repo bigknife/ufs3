@@ -87,6 +87,16 @@ object Main {
             log.error(t.getMessage)
         }
 
+      case Some(x) if x.cmd == "list" ⇒
+        initLog4j(x.logLevel)
+        ListCommand.run(x.coreConfig, x.listLimit, x.listOrder) match {
+          case Success(_) ⇒
+          case Failure(t) ⇒
+            log.debug(s"list file failed", t)
+            log.error(t.getMessage)
+        }
+
+
       case Some(_) ⇒ System.err.println("please re-run ufs with --help or -h: ufs3 --help")
       case _       ⇒ //println("please run with help command: ufs3 help")
     }
