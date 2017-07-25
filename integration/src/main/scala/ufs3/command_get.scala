@@ -46,7 +46,7 @@ object GetCommand {
       _    ← read[ReadApp, OutputStream](key, ufs3, to).run(coreConfig)
     } yield ()
 
-  private def _run(coreConfig: CoreConfig, key: String, out: OutputStream): Try[Unit] = {
+  private[command] def _run(coreConfig: CoreConfig, key: String, out: OutputStream): Try[Unit] = {
     val prog        = getProg(coreConfig, key, out)
     val interpreter = getInterpreter
     Try {
@@ -58,5 +58,11 @@ object GetCommand {
     // create key, md5 of file name
     val outputStream = new BufferedOutputStream(new FileOutputStream(to))
     _run(coreConfig, key, outputStream).flatMap(_ ⇒ Try{outputStream.close()})
+  }
+
+  def existed(coreConfig: CoreConfig, key: String): Try[Boolean] = {
+    Try {
+      core.existed[ReadApp](key).run(coreConfig).foldMap(getInterpreter).run(UniConfig()).unsafeRunSync()
+    }
   }
 }

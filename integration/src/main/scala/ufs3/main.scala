@@ -114,6 +114,10 @@ object Main {
             log.error(t.getMessage)
         }
 
+      case Some(x) if x.cmd == "serve" ⇒
+        initLog4j(x.logLevel)
+        ServeCommand.run(x.coreConfig, x.serveHost, x.servePort)
+
       case Some(_) ⇒ System.err.println("please re-run ufs with --help or -h: ufs3 --help")
       case _       ⇒ //println("please run with help command: ufs3 help")
     }

@@ -106,6 +106,18 @@ package object core {
     })
   }
 
+  def existed[F[_]](key: String)(implicit B: Block[F],
+                    F: Filler[F],
+                    FI: Fildex[F],
+                    L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Boolean]] = {
+    openForRead[F].andThen[SOP[F, Boolean]]((x: SOP[F, UFS3]) ⇒ {
+      for {
+        ufs3 ← x
+        e ← FI.fetch(key, ufs3.fildexFile.get())
+      } yield e.nonEmpty
+    })
+  }
+
   def list[F[_]](limit: Int, order: String)(implicit B: Block[F],
                                             F: Filler[F],
                                             FI: Fildex[F],

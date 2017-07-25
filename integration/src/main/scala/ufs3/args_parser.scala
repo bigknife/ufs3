@@ -30,7 +30,9 @@ package object parser {
       getKey: String = null,
       listLimit: Int = -1,
       listOrder: String = "desc",
-      freeSpaceUnit: String = "M"
+      freeSpaceUnit: String = "M",
+      serveHost: String = "0.0.0.0",
+      servePort: Int = 3080
   ) {
     def coreConfig: CoreConfig = new CoreConfig {
       import ufs3.kernel.block.Block.Size._
@@ -157,28 +159,42 @@ package object parser {
       )
 
     cmd("free")
-        .text("free: view the free space")
+      .text("free: view the free space")
+      .children(
+        cmd("block")
+          .text("block: view the free space of block")
+          .action((_, c) ⇒ c.copy(cmd = "free-block"))
           .children(
-            cmd("block")
-              .text("block: view the free space of block")
-              .action((_, c) ⇒ c.copy(cmd = "free-block"))
-              .children(
-                opt[String]("with-unit")
-                    .text("the unit for showing free space (G|M|K), default is M")
-                  .action((u, c) ⇒ c.copy(freeSpaceUnit = u)),
-                fillerFileOpt("file", "f"),
-                logOpt
-              ),
-            cmd("idx")
-              .text("idx: view the free space of index")
-              .action((_, c) ⇒ c.copy(cmd = "free-idx"))
-              .children(
-                opt[String]("with-unit")
-                  .text("the unit for showing free space (G|M|K), default is M")
-                  .action((u, c) ⇒ c.copy(freeSpaceUnit = u)),
-                fillerFileOpt("file", "f"),
-                logOpt
-              )
+            opt[String]("with-unit")
+              .text("the unit for showing free space (G|M|K), default is M")
+              .action((u, c) ⇒ c.copy(freeSpaceUnit = u)),
+            fillerFileOpt("file", "f"),
+            logOpt
+          ),
+        cmd("idx")
+          .text("idx: view the free space of index")
+          .action((_, c) ⇒ c.copy(cmd = "free-idx"))
+          .children(
+            opt[String]("with-unit")
+              .text("the unit for showing free space (G|M|K), default is M")
+              .action((u, c) ⇒ c.copy(freeSpaceUnit = u)),
+            fillerFileOpt("file", "f"),
+            logOpt
           )
+      )
+
+    cmd("serve")
+      .text("serve: start a http server to expose get/put interface")
+      .action((_, c) ⇒ c.copy(cmd = "serve"))
+      .children(
+        opt[String]("host")
+          .text("the host to be listened")
+          .action((s, c) ⇒ c.copy(serveHost = s)),
+        opt[Int]("port")
+          .text("the port to be listened")
+          .action((s, c) ⇒ c.copy(servePort = s)),
+        fillerFileOpt("file", "f"),
+        logOpt
+      )
   }
 }
