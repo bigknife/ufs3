@@ -41,7 +41,7 @@ trait FildexInterpreter extends Fildex.Handler[Kleisli[IO, FildexInterpreter.Con
 
         val headBytes = {
           ff.seek(0)
-          val bb = ff.read(FildexFileLayout.HEAD_SIZE)
+          val bb    = ff.read(FildexFileLayout.HEAD_SIZE)
           val bytes = new Array[Byte](FildexFileLayout.HEAD_SIZE.toInt)
           bb.get(bytes)
           bytes
@@ -59,7 +59,7 @@ trait FildexInterpreter extends Fildex.Handler[Kleisli[IO, FildexInterpreter.Con
     IO {
       val headBytes = {
         ff.seek(0)
-        val bb = ff.read(FildexFileLayout.HEAD_SIZE)
+        val bb    = ff.read(FildexFileLayout.HEAD_SIZE)
         val bytes = new Array[Byte](FildexFileLayout.HEAD_SIZE.toInt)
         bb.get(bytes)
         bytes
@@ -77,21 +77,35 @@ trait FildexInterpreter extends Fildex.Handler[Kleisli[IO, FildexInterpreter.Con
       }
   }
 
-  def append(bf: FildexFile, idx: Fildex.Idx): Kleisli[IO, FildexInterpreter.Config, FildexFile] = Kleisli {config ⇒
+  def append(bf: FildexFile, idx: Fildex.Idx): Kleisli[IO, FildexInterpreter.Config, FildexFile] = Kleisli { config ⇒
     IO {
       import RandomFildexFile._
       bf.append(idx.key, idx)
     }
   }
 
+  def repair(bf: Block.BlockFile, filler: FillerFile): Kleisli[IO, FildexInterpreter.Config, FildexFile] = Kleisli {
+    config ⇒
+      IO {
+        //TODO repair
+        //
+        ???
+      }
+  }
 
-  def repair(bf: Block.BlockFile, filler: FillerFile): Kleisli[IO, FildexInterpreter.Config, FildexFile] = Kleisli {config ⇒
+  def query(limit: Int,
+            order: Fildex.Order,
+            fildex: FildexFile): Kleisli[IO, FildexInterpreter.Config, Vector[Fildex.Idx]] = Kleisli { config ⇒
     IO {
-      //TODO repair
-      //
-      ???
+      import RandomFildexFile._
+      fildex.query(limit, order)
     }
   }
+
+  def freeSpace(fi: FildexFile): Kleisli[IO, FildexInterpreter.Config, Long] = Kleisli {config ⇒ IO {
+    import RandomFildexFile._
+    fi.freeSpace
+  }}
 }
 
 object FildexInterpreter {

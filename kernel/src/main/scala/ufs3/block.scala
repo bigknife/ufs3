@@ -108,7 +108,7 @@ object Block {
     def read(size: Long): ByteBuffer
     def write(data: ByteBuffer, size: Long): Unit
     def lock(): FileLock
-    */
+   */
   }
 
   /**
@@ -117,11 +117,11 @@ object Block {
     * The file wrapper, we can get a file from a Path.
     */
   import java.io.File
-  sealed trait Path {outter ⇒
+  sealed trait Path { outter ⇒
     def file: Eval[File]
 
     def indexPath: Path = new Path {
-      def file: Eval[File] =  outter.file.map(f ⇒ new File(f.getAbsolutePath + ".idx"))
+      def file: Eval[File] = outter.file.map(f ⇒ new File(f.getAbsolutePath + ".idx"))
     }
   }
   object Path {
@@ -157,6 +157,12 @@ object Block {
     */
   sealed trait Size {
     def sizeInByte: Long
+    def toStringWithUnit(u: String): String = u match {
+      case "G" ⇒ "%.2fGiB" format sizeInByte.toDouble / 1024 / 1024 / 1024
+      case "M" ⇒ "%.2fMiB" format sizeInByte.toDouble / 1024 / 1024
+      case "K" ⇒ "%.2fKiB" format sizeInByte.toDouble / 1024
+      case _   ⇒ sizeInByte.toString + "B"
+    }
   }
 
   object Size {

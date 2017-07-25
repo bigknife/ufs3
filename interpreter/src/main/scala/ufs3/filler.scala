@@ -78,6 +78,11 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
       ff.tailPos(endPosition).version(ff.version + 1).versionPos(startPosition).refreshHead()
     }
   }
+
+  def freeSpace(ff: FillerFile): Kleisli[IO, FillerInterpreter.Config, Long] = Kleisli {config ⇒ IO {
+    import RandomFillerFile._
+    ff.freeSpace
+  }}
 }
 
 object FillerInterpreter {

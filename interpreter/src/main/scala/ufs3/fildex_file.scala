@@ -11,6 +11,7 @@ package fildex
 
 import ufs3.interpreter.block.{BlockFileBasedFile, RandomAccessBlockFile}
 import ufs3.interpreter.layout.{FildexFileLayout, IdxLayout}
+import ufs3.kernel.fildex.Fildex
 import ufs3.kernel.fildex.Fildex.{FildexFile, Idx}
 
 import scala.annotation.tailrec
@@ -31,6 +32,8 @@ final class RandomFildexFile(private val layout: FildexFileLayout,
     seek(0)
     write(layout.head.byteBuffer)
   }
+
+  def freeSpace: Long = underlying.size() - layout.tailPosition.longValue
 
   def fetchIdx(key: String): Option[Idx] = indexMap.get(key)
 
@@ -68,6 +71,12 @@ final class RandomFildexFile(private val layout: FildexFileLayout,
     }
     val index = _index(FildexFileLayout.HEAD_SIZE.toLong, layout.tailPosition.longValue, Map.empty)
     new RandomFildexFile(layout, underlying, index)
+  }
+
+  def query(limit: Int, order: Fildex.Order): Vector[Idx] = {
+    // todo return all idx now, should be fixed in next version
+    // should use a query-friendly data structer to store the index
+    indexMap.toVector.map(_._2)
   }
 }
 
