@@ -150,7 +150,7 @@
 
 ## Contribute
 1. 欢迎提各种`Bug`,`Feature`, 请移步[https://gitlab.barcsys.com/bigknife/ufs3/issues](https://gitlab.barcsys.com/bigknife/ufs3/issues)
-2. 欢迎`fork`: [https://gitlab.barcsys.com/bigknife/ufs3](https://gitlab.barcsys.com/bigknife/ufs3
+2. 欢迎`fork`: [https://gitlab.barcsys.com/bigknife/ufs3](https://gitlab.barcsys.com/bigknife/ufs3)
 
 ## Contributor
 * [宋增辉](https://gitlab.barcsys.com/u/bigknife)
