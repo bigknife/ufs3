@@ -19,7 +19,6 @@ import ufs3.interpreter.block.RandomAccessBlockFile
 import ufs3.interpreter.layout.FillerFileLayout
 import ufs3.kernel.filler.Filler.FillerFile
 
-
 /**
   * Filler Interpreter
   * Filler File Layout: @see {FillerFileLayout}
@@ -50,17 +49,19 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
 
       import RandomAccessBlockFile._
       require(blockFile.size() >= FillerFileLayout.HEAD_SIZE,
-        s"the block file lenght should be greater than ${FillerFileLayout.HEAD_SIZE}")
+              s"the block file length should be greater than ${FillerFileLayout.HEAD_SIZE}")
 
       val headBytes = {
         blockFile.seek(0)
-        val bb = blockFile.read(FillerFileLayout.HEAD_SIZE)
+        val bb    = blockFile.read(FillerFileLayout.HEAD_SIZE)
         val bytes = new Array[Byte](FillerFileLayout.HEAD_SIZE.toInt)
         bb.get(bytes)
         bytes
       }
       // the magic check is in the `resoveBytes`
       val layout = FillerFileLayout.resolveBytes(headBytes)
+      require(blockFile.size() == layout.blockSize.longValue,
+              s"the block file length should eq ${layout.blockSize.longValue}")
       RandomFillerFile(layout = layout, underlying = blockFile)
 
     }
@@ -77,7 +78,9 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
     }
   }
 
-  def endAppend(ff: Filler.FillerFile, startPosition: Long, endPosition: Long): Kleisli[IO, FillerInterpreter.Config, FillerFile] = Kleisli {config ⇒
+  def endAppend(ff: Filler.FillerFile,
+                startPosition: Long,
+                endPosition: Long): Kleisli[IO, FillerInterpreter.Config, FillerFile] = Kleisli { config ⇒
     IO {
       import RandomFillerFile._
       FillerInterpreter.atomWriting.decrementAndGet()
@@ -103,5 +106,5 @@ object FillerInterpreter {
 
   trait Config {}
 
-  def apply(): FillerInterpreter = new FillerInterpreter(){}
+  def apply(): FillerInterpreter = new FillerInterpreter() {}
 }

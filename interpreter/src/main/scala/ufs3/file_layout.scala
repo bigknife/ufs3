@@ -20,8 +20,9 @@ object Layout {
       def bytes: Bytes = outter.bytes ++ n.bytes
     }
 
-    def longValue: Long = byteBuffer.getLong
-    def intValue: Int = byteBuffer.getInt
+    def longValue: Long     = byteBuffer.getLong
+    def intValue: Int       = byteBuffer.getInt
+    def stringValue: String = new String(bytes, "utf-8")
 
     override def toString: String = s"${len}Bytes"
   }
@@ -39,6 +40,8 @@ object Layout {
   case class `32Bytes`(bytes: Bytes) extends FixedLengthBytes(32)
 
   // others
+  case class `40Bytes`(bytes: Bytes)  extends FixedLengthBytes(40)
+  case class `52Bytes`(bytes: Bytes)  extends FixedLengthBytes(52)
   case class `60Bytes`(bytes: Bytes)  extends FixedLengthBytes(60)
   case class `64Bytes`(bytes: Bytes)  extends FixedLengthBytes(64)
   case class `100Bytes`(bytes: Bytes) extends FixedLengthBytes(100)
@@ -59,6 +62,8 @@ object Layout {
     def `8Bytes`: Layout.`8Bytes`     = Layout.`8Bytes`(ev(a))
     def `32Bytes`: Layout.`32Bytes`   = Layout.`32Bytes`(ev(a))
     def `24Bytes`: Layout.`24Bytes`   = Layout.`24Bytes`(ev(a))
+    def `40Bytes`: Layout.`40Bytes`   = Layout.`40Bytes`(ev(a))
+    def `52Bytes`: Layout.`52Bytes`   = Layout.`52Bytes`(ev(a))
     def `60Bytes`: Layout.`60Bytes`   = Layout.`60Bytes`(ev(a))
     def `64Bytes`: Layout.`64Bytes`   = Layout.`64Bytes`(ev(a))
     def `100Bytes`: Layout.`100Bytes` = Layout.`100Bytes`(ev(a))
@@ -92,17 +97,17 @@ trait FillerFileLayout { self ⇒
   def version(v: Int): FillerFileLayout = new FillerFileLayout {
     import Layout._
     val tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.tailPosition
-    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = v.`4Bytes`
-    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.blockSize
-    val versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.versionPos
+    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = v.`4Bytes`
+    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = self.blockSize
+    val versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes`   = self.versionPos
   }
 
   def versionPos(p: Long): FillerFileLayout = new FillerFileLayout {
     import Layout._
     val tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.tailPosition
-    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = self.version
-    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = self.blockSize
-    val versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = p.`8Bytes`
+    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = self.version
+    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = self.blockSize
+    val versionPos: _root_.ufs3.interpreter.layout.Layout.`8Bytes`   = p.`8Bytes`
   }
 }
 
@@ -144,7 +149,7 @@ object FillerFileLayout {
   }
 }
 
-trait FildexFileLayout {outter ⇒
+trait FildexFileLayout { outter ⇒
   import Layout._
   def magic: `4Bytes` = `4Bytes`(FildexFileLayout.HEAD_MAGIC)
   val blockSize: `8Bytes`
@@ -157,19 +162,19 @@ trait FildexFileLayout {outter ⇒
 
   def version(v: Int): FildexFileLayout = new FildexFileLayout {
     val tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.tailPosition
-    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = v.`4Bytes`
-    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.blockSize
+    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = v.`4Bytes`
+    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = outter.blockSize
   }
   def tailPosition(p: Long): FildexFileLayout = new FildexFileLayout {
     val tailPosition: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = p.`8Bytes`
-    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes` = outter.version
-    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.blockSize
+    val version: _root_.ufs3.interpreter.layout.Layout.`4Bytes`      = outter.version
+    val blockSize: _root_.ufs3.interpreter.layout.Layout.`8Bytes`    = outter.blockSize
   }
 }
 
 object FildexFileLayout {
   val HEAD_MAGIC: Array[Byte] = "FILD".getBytes("iso8859_1")
-  val HEAD_SIZE: Long         = 24
+  val HEAD_SIZE: Long         = 24L
   import Layout._
 
   def apply(_blockSize: Long, _tailPosition: Long = HEAD_SIZE, _version: Int = 0): FildexFileLayout =
@@ -201,9 +206,107 @@ object IdxLayout {
   val SIZE: Long = 48 // key is 32, startPoint 8, end point 8
   def resolveBytes(bytes: Array[Byte]): Idx = {
     require(bytes.length == SIZE, s"fildex index key item should be $SIZE Bytes")
-    val key = new String(bytes.take(32), "utf-8")
+    val key        = new String(bytes.take(32), "utf-8")
     val startPoint = bytes.slice(32, 40).`8Bytes`.longValue
-    val endPoint = bytes.slice(40, 48).`8Bytes`.longValue
+    val endPoint   = bytes.slice(40, 48).`8Bytes`.longValue
     Idx(key, startPoint, endPoint)
+  }
+}
+
+trait SandwichHeadLayout { outter ⇒
+  import Layout._
+  def magic: `4Bytes`      = `4Bytes`(SandwichHeadLayout.HEAD_MAGIC)
+  def createTime: `8Bytes` = `8Bytes`(System.currentTimeMillis())
+  def key: `32Bytes`
+  def bodyLength: `8Bytes`
+
+  def head: `52Bytes` = `52Bytes`(
+    (magic ++ createTime ++ key ++ bodyLength).bytes
+  )
+
+}
+
+object SandwichHeadLayout {
+  // the size of Sandwich-Head is 52 Bytes
+  // [0 - 4): the magic, 'UFS3'
+  // [4 - 12): the create time
+  // [12 - 44): the key of the file
+  // [44 - 52): the body length
+  val HEAD_MAGIC: Array[Byte] = "UFS3".getBytes
+  val HEAD_LENGTH: Int        = 52
+  //the size of sandwich created time millis
+  val HEAD_CREATE_TIME_SIZE: Int = 8
+  //the size  of sandwich name converted to hex string
+  val HEAD_KEY_SIZE: Int = 32
+  //the size of sandwich body
+  val HEAD_BODY_LENGTH_SIZE: Int = 8
+
+  import Layout._
+
+  def apply(_key: String, _bodyLength: Long): SandwichHeadLayout = new SandwichHeadLayout {
+    val key: Layout.`32Bytes`       = _key.`32Bytes`
+    val bodyLength: Layout.`8Bytes` = _bodyLength.`8Bytes`
+  }
+
+  def resolveBytes(bytes: Bytes): SandwichHeadLayout = {
+    require(bytes.length == HEAD_LENGTH, s"Sandwich head plus tail size must eq $HEAD_LENGTH ")
+    val magicByes = bytes.take(4)
+    require(magicByes sameElements HEAD_MAGIC, s"Sandwich head magic must be $HEAD_MAGIC")
+    val createTimeBytes = bytes.slice(4, 12)
+    val keyBytes        = bytes.slice(12, 44)
+    val bodyLengthBytes = bytes.slice(44, 52)
+    new SandwichHeadLayout {
+      override val createTime: `8Bytes` = createTimeBytes.`8Bytes`
+      val key: `32Bytes`                = keyBytes.`32Bytes`
+      val bodyLength: `8Bytes`          = bodyLengthBytes.`8Bytes`
+    }
+  }
+}
+
+trait SandwichTailLayout {
+  import Layout._
+  def hash: `32Bytes`
+  def bodyLength: `8Bytes`
+
+  def tail: `40Bytes` = `40Bytes`(
+    (hash ++ bodyLength).bytes
+  )
+}
+
+object SandwichTailLayout {
+  // the size of Sandwich-Tail is 40 Bytes
+  // [0-32): the hash of body
+  // [32-40): the body length
+  // the size of Sandwich-Tail is 16 Bytes, the hash of the body
+  val TAIL_HASH_SIZE: Int = 32
+  //the size of sandwich body stored in tail
+  val TAIL_BODY_LENGTH_SIZE: Int = 8
+  //the size of sandwich tail
+  val TAIL_LENGTH: Int = 40
+
+  import Layout._
+
+  def apply(_hash: Bytes, _bodyLength: Long): SandwichTailLayout = new SandwichTailLayout {
+    override def hash: `32Bytes`      = _hash.`32Bytes`
+    override def bodyLength: `8Bytes` = _bodyLength.`8Bytes`
+  }
+
+  def resolveBytes(bytes: Bytes): SandwichTailLayout = {
+    require(bytes.length == TAIL_LENGTH, s"Sandwich tail size must eq $TAIL_LENGTH")
+    val hashBytes       = bytes.take(32)
+    val bodyLengthBytes = bytes.slice(32, 40)
+    new SandwichTailLayout {
+      override def hash: `32Bytes`      = hashBytes.`32Bytes`
+      override def bodyLength: `8Bytes` = bodyLengthBytes.`8Bytes`
+    }
+  }
+}
+
+object SandwichLayout {
+  implicit def from(byteBuffer: ByteBuffer): Array[Byte] = {
+    if (byteBuffer.position() != 0) byteBuffer.flip()
+    val byteArray = new Array[Byte](byteBuffer.limit())
+    byteBuffer.get(byteArray)
+    byteArray
   }
 }
