@@ -248,28 +248,33 @@ package object core {
   // 2. travese sandwich body and write them
   // 3. write sandwich tail
   // Done: no index, no backup, no lock will be fixed at #17: add backup logic to core dsl
-  def write[F[_], IN](key: String, in: IN, out: UFS3)(
-      implicit B: Block[F],
-      F: Filler[F],
-      //BAK: Backup[F],
-      L: Log[F],
-      FI: Fildex[F],
-      S: SandwichIn[F, IN]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
+  def write[F[_], IN](key: String, in: IN, out: UFS3)(implicit B: Block[F],
+                                                      F: Filler[F],
+                                                      //BAK: Backup[F],
+                                                      L: Log[F],
+                                                      FI: Fildex[F],
+                                                      S: SandwichIn[F, IN]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
     Kleisli { coreConfig ⇒
       import L._
       def prog(md: MessageDigest): Id[SOP[F, Unit]] =
         for {
+          writing ← F.isWriting(out.fillerFile.get())
+          optIdx ← if (writing) {
+            for {
+              _ ← warn(s"ufs3 is writing, please retry later! requesting key = $key")
+            } yield throw new IllegalAccessException("ufs3 is writing, please retry later")
+            //throw new IllegalAccessException("ufs3 is writing, please retry later")
+          } else FI.fetch(key, out.fildexFile.get())
           _ ← info(s"writing for key: $key")
-          optIdx ← FI.fetch(key, out.fildexFile.get())
           startPos ← if (optIdx.isEmpty) F.startAppend(out.fillerFile.get())
           else {
             for {
               _ ← error(s"stop writing, $key has existed in ufs3")
-            }yield throw new IllegalArgumentException(s"$key has existed in ufs3")
+            } yield throw new IllegalArgumentException(s"$key has existed in ufs3")
 
           }
           _     ← B.seek(out.blockFile.get(), startPos)
-          headB ← S.head(key, 0)//length can't be detected
+          headB ← S.head(key, 0) //length can't be detected
           _     ← B.write(out.blockFile.get(), headB)
           //_        ← BAK.send(headB) //backup
           bodyLength ← {
@@ -302,8 +307,9 @@ package object core {
           newFillerFile ← F.endAppend(out.fillerFile.get(),
                                       startPos,
                                       startPos + headB.limit() + bodyLength + tailB.limit())
-          _ ← info(s"writed filler and fildex with key: $key. startPos: $startPos, endPos: ${startPos + headB.limit() + bodyLength + tailB
-            .limit()}")
+          _ ← info(
+            s"writed filler and fildex with key: $key. startPos: $startPos, endPos: ${startPos + headB.limit() + bodyLength + tailB
+              .limit()}")
         } yield {
           out.fillerFile.set(newFillerFile)
           out.fildexFile.set(newFildexFile)

@@ -26,6 +26,7 @@ trait Filler[F[_]] {
   def startAppend(ff: FillerFile): Par[F, Long]
   def endAppend(ff: FillerFile, startPosition: Long, endPosition: Long): Par[F, FillerFile]
   def freeSpace(ff: FillerFile): Par[F, Long]
+  def isWriting(ff: FillerFile): Par[F, Boolean]
 }
 object Filler {
   sealed trait Op[A]
@@ -35,6 +36,7 @@ object Filler {
   final case class StartAppend(ff: FillerFile)                                       extends Op[Long]
   final case class EndAppend(ff: FillerFile, startPosition: Long, endPosition: Long) extends Op[FillerFile]
   final case class FreeSpace(ff: FillerFile)                                         extends Op[Long]
+  final case class IsWriting(ff: FillerFile)                                         extends Op[Boolean]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Filler[F] {
     def init(bf: BlockFile): Par[F, FillerFile]   = liftPar_T[Op, F, FillerFile](Init(bf))
@@ -45,6 +47,8 @@ object Filler {
       liftPar_T[Op, F, FillerFile](EndAppend(ff, startPosition, endPosition))
 
     def freeSpace(ff: FillerFile): Par[F, Long] = liftPar_T[Op, F, Long](FreeSpace(ff))
+
+    def isWriting(ff: FillerFile): Par[F, Boolean] = liftPar_T[Op, F, Boolean](IsWriting(ff))
   }
 
   implicit def to[F[_]](implicit I: Inject[Op, F]): Filler[F] = new To[F]
@@ -58,6 +62,7 @@ object Filler {
     def startAppend(ff: FillerFile): M[Long]
     def endAppend(ff: FillerFile, startPosition: Long, endPosition: Long): M[FillerFile]
     def freeSpace(ff: FillerFile): M[Long]
+    def isWriting(ff: FillerFile): M[Boolean]
 
     override def apply[A](fa: Op[A]): M[A] = fa match {
       case Init(bf)                                  ⇒ init(bf)
@@ -66,6 +71,7 @@ object Filler {
       case StartAppend(ff)                           ⇒ startAppend(ff)
       case EndAppend(ff, startPosition, endPosition) ⇒ endAppend(ff, startPosition, endPosition)
       case FreeSpace(ff)                             ⇒ freeSpace(ff)
+      case IsWriting(ff)                             ⇒ isWriting(ff)
     }
   }
 
