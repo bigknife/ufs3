@@ -9,6 +9,8 @@ package ufs3
 package interpreter
 package filler
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import cats.data.Kleisli
 import ufs3.kernel.filler._
 import cats.effect.IO
@@ -68,13 +70,17 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
     IO {
       import RandomFillerFile._
       if (ff.isFull) throw new IllegalAccessException("the filler file is full")
-      else ff.tailPos
+      else {
+        FillerInterpreter.atomWriting.incrementAndGet()
+        ff.tailPos
+      }
     }
   }
 
   def endAppend(ff: Filler.FillerFile, startPosition: Long, endPosition: Long): Kleisli[IO, FillerInterpreter.Config, FillerFile] = Kleisli {config ⇒
     IO {
       import RandomFillerFile._
+      FillerInterpreter.atomWriting.decrementAndGet()
       ff.tailPos(endPosition).version(ff.version + 1).versionPos(startPosition).refreshHead()
     }
   }
@@ -83,9 +89,18 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
     import RandomFillerFile._
     ff.freeSpace
   }}
+
+  def isWriting(ff: FillerFile): Kleisli[IO, FillerInterpreter.Config, Boolean] = Kleisli {config ⇒
+    IO {
+      FillerInterpreter.atomWriting.get() != 0
+    }
+  }
 }
 
 object FillerInterpreter {
+
+  val atomWriting = new AtomicInteger(0)
+
   trait Config {}
 
   def apply(): FillerInterpreter = new FillerInterpreter(){}

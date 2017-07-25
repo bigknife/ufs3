@@ -33,7 +33,7 @@ object PutCommand {
 
   type WriteApp[A] = Coproduct[SandwichIn.Op[InputStream, ?], StartupApp, A]
 
-  private def putInterpreter(): NT[WriteApp, Kleisli[IO, UniConfig, ?]] = {
+  private val putInterpreter: NT[WriteApp, Kleisli[IO, UniConfig, ?]] = {
     sandwichInInterpreter or
       (fildexInterperter or
         (logInterperter or
@@ -48,7 +48,7 @@ object PutCommand {
 
   def _run(coreConfig: CoreConfig, key: String, ins: InputStream): Try[Unit] = {
     val prog = putProg(coreConfig, key, ins)
-    val interpreter = putInterpreter()
+    val interpreter = putInterpreter
     Try {
       prog.foldMap(interpreter).run(UniConfig()).unsafeRunSync()
     }
