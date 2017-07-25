@@ -151,7 +151,7 @@ object WriteFileTest {
             for {
               ins ← SOP.pure[WriteApp, InputStream](newIns())
               size ← SOP.pure[WriteApp, Int] (ins.available())
-              _ ← write[WriteApp, InputStream](key(), ins.available().toLong, ins, ufs3).run(coreConfig)
+              _ ← write[WriteApp, InputStream](key(),  ins, ufs3).run(coreConfig)
               _ ← SOP.pure[WriteApp, Unit]({println(s"writed : $c"); ins.close()})
               writedSize ← run(c - 1)
             } yield size + writedSize

@@ -188,6 +188,22 @@ trait FildexInterpreter extends Fildex.Handler[Kleisli[IO, FildexInterpreter.Con
         }
       }
   }
+
+  def query(limit: Int,
+            order: Fildex.Order,
+            fildex: FildexFile): Kleisli[IO, FildexInterpreter.Config, Vector[Fildex.Idx]] = Kleisli { config ⇒
+    IO {
+      import RandomFildexFile._
+      fildex.query(limit, order)
+    }
+  }
+
+  def freeSpace(fi: FildexFile): Kleisli[IO, FildexInterpreter.Config, Long] = Kleisli { config ⇒
+    IO {
+      import RandomFildexFile._
+      fi.freeSpace
+    }
+  }
 }
 
 object FildexInterpreter {

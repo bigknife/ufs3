@@ -13,7 +13,7 @@ import ufs3.log.interpreter.LogInterpreter.Config
   */
 trait LogInterpreter extends Log.Handler[Kleisli[IO, Config, ?]] {
 
-  private lazy val logger: Logger = Logger.getLogger(getClass.getName)
+  private lazy val logger: Logger = Logger.getLogger("ufs3")
 
   override def debug(msg: String, cause: Option[Throwable]): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
     IO {
