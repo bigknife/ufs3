@@ -43,10 +43,10 @@ object PutCommand {
   private def putProg(coreConfig: CoreConfig, key: String, ins: InputStream): SOP[WriteApp, Unit] =
     for {
       ufs3 ← openForWrite[WriteApp].run(coreConfig)
-      _    ← write[WriteApp, InputStream](key, ins.available().toLong, ins, ufs3).run(coreConfig)
+      _    ← write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig)
     } yield ()
 
-  private def _run(coreConfig: CoreConfig, key: String, ins: InputStream): Try[Unit] = {
+  def _run(coreConfig: CoreConfig, key: String, ins: InputStream): Try[Unit] = {
     val prog = putProg(coreConfig, key, ins)
     val interpreter = putInterpreter()
     Try {

@@ -89,7 +89,7 @@ package object core {
     openForRead[F].andThen[SOP[F, Long]]((x: SOP[F, UFS3]) ⇒ {
       for {
         ufs3 ← x
-        l ← F.freeSpace(ufs3.fillerFile.get())
+        l    ← F.freeSpace(ufs3.fillerFile.get())
       } yield l
     })
   }
@@ -101,19 +101,19 @@ package object core {
     openForRead[F].andThen[SOP[F, Long]]((x: SOP[F, UFS3]) ⇒ {
       for {
         ufs3 ← x
-        l ← FI.freeSpace(ufs3.fildexFile.get())
+        l    ← FI.freeSpace(ufs3.fildexFile.get())
       } yield l
     })
   }
 
   def existed[F[_]](key: String)(implicit B: Block[F],
-                    F: Filler[F],
-                    FI: Fildex[F],
-                    L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Boolean]] = {
+                                 F: Filler[F],
+                                 FI: Fildex[F],
+                                 L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Boolean]] = {
     openForRead[F].andThen[SOP[F, Boolean]]((x: SOP[F, UFS3]) ⇒ {
       for {
         ufs3 ← x
-        e ← FI.fetch(key, ufs3.fildexFile.get())
+        e    ← FI.fetch(key, ufs3.fildexFile.get())
       } yield e.nonEmpty
     })
   }
@@ -248,7 +248,7 @@ package object core {
   // 2. travese sandwich body and write them
   // 3. write sandwich tail
   // Done: no index, no backup, no lock will be fixed at #17: add backup logic to core dsl
-  def write[F[_], IN](key: String, length: Long, in: IN, out: UFS3)(
+  def write[F[_], IN](key: String, in: IN, out: UFS3)(
       implicit B: Block[F],
       F: Filler[F],
       //BAK: Backup[F],
@@ -259,11 +259,17 @@ package object core {
       import L._
       def prog(md: MessageDigest): Id[SOP[F, Unit]] =
         for {
+          _ ← info(s"writing for key: $key")
           optIdx ← FI.fetch(key, out.fildexFile.get())
           startPos ← if (optIdx.isEmpty) F.startAppend(out.fillerFile.get())
-          else throw new IllegalArgumentException(s"$key has existed in ufs3")
+          else {
+            for {
+              _ ← error(s"stop writing, $key has existed in ufs3")
+            }yield throw new IllegalArgumentException(s"$key has existed in ufs3")
+
+          }
           _     ← B.seek(out.blockFile.get(), startPos)
-          headB ← S.head(key, length)
+          headB ← S.head(key, 0)//length can't be detected
           _     ← B.write(out.blockFile.get(), headB)
           //_        ← BAK.send(headB) //backup
           bodyLength ← {
@@ -276,6 +282,7 @@ package object core {
                     _ ← B.seek(out.blockFile.get(), pos)
                     _ ← B.write(out.blockFile.get(), obb.get)
                     a ← writeBody(md5, pos + obb.get.limit())
+                    _ ← debug(s"writing $key, from $pos, length: ${obb.get.limit()}")
                   } yield a
                 } else
                   Par.pure[F, Long](0): SOP[F, Long] // implicitly transformed by liftPAR_to_SOP
@@ -284,9 +291,9 @@ package object core {
             // 从 startpos + headB 的地方写入
             writeBody(md, startPos + headB.limit())
           }
-          _     ← debug(s"writed $bodyLength bytes")
-          _     ← debug(md.digest().map("%02x".format(_)).mkString(""))
-          tailB ← S.tail(md.digest().map("%02x".format(_)).mkString("").getBytes("iso8859_1"), bodyLength)
+          md5   ← SOP.pure[F, String](md.digest().map("%02x".format(_)).mkString(""))
+          _     ← debug(s"writed $bodyLength bytes with key = $key, md5 = $md5")
+          tailB ← S.tail(md5.getBytes("iso8859_1"), bodyLength)
           _     ← B.seek(out.blockFile.get(), startPos + headB.limit() + bodyLength)
           _     ← B.write(out.blockFile.get(), tailB)
           //_     ← BAK.send(tailB)
@@ -295,8 +302,8 @@ package object core {
           newFillerFile ← F.endAppend(out.fillerFile.get(),
                                       startPos,
                                       startPos + headB.limit() + bodyLength + tailB.limit())
-          _ ← debug(s"writed. startPos: $startPos, endPos: ${startPos + headB.limit() + bodyLength + tailB
-            .limit()}, ${headB.limit()} $bodyLength ${tailB.limit()}")
+          _ ← info(s"writed filler and fildex with key: $key. startPos: $startPos, endPos: ${startPos + headB.limit() + bodyLength + tailB
+            .limit()}")
         } yield {
           out.fillerFile.set(newFillerFile)
           out.fildexFile.set(newFildexFile)

@@ -16,10 +16,12 @@ import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusC
 import akka.http.scaladsl.server.Route
 import pharaoh.SimplePharaohApp
 import akka.http.scaladsl.server.Directives._
-import akka.stream.IOResult
-import akka.stream.scaladsl.{Source, StreamConverters}
-import akka.util.ByteString
+import akka.stream.{IOResult, Materializer}
+import akka.stream.scaladsl.{Sink, Source, StreamConverters}
+import akka.util.{ByteString, Timeout}
 import ufs3.core.CoreConfig
+import akka.pattern._
+import ufs3.integration.command.actor.UploadProxyActor
 
 import scala.concurrent.Future
 import scala.util.control.NonFatal
@@ -63,7 +65,7 @@ trait ServeCommand extends SimplePharaohApp {
             val byteStringSource: Source[ByteString, Future[IOResult]] =
               StreamConverters.fromInputStream(in = () ⇒ {
                 val out = new java.io.PipedOutputStream()
-                val in = new java.io.PipedInputStream()
+                val in  = new java.io.PipedInputStream()
                 out.connect(in)
                 //todo add actor router
                 //controll reading count
@@ -75,9 +77,9 @@ trait ServeCommand extends SimplePharaohApp {
           }
 
           GetCommand.existed(config, key) match {
-            case Success(true) ⇒ read
+            case Success(true)  ⇒ read
             case Success(false) ⇒ HttpResponse(status = StatusCodes.NotFound, entity = s"$key not found")
-            case Failure(t) ⇒ throw t
+            case Failure(t)     ⇒ throw t
           }
 
         }
@@ -85,7 +87,28 @@ trait ServeCommand extends SimplePharaohApp {
     }
   }
 
-
+  // put route
+  def putRoute(config: CoreConfig, actor: ActorRef): Route = path("put" / Segment) { key ⇒
+    put {
+      extractRequestContext { ctx ⇒
+        fileUpload("file") {
+          case (fileInfo, byteSource) ⇒
+            complete {
+              // todo use another blocking ec
+              implicit val ec = system.dispatcher
+              import scala.concurrent.duration._
+              implicit val timeout      = Timeout(30.minutes)
+              val f = actor ? UploadProxyActor.Events.UploadRequest(key, byteSource)
+              // f will be Option[Throwable]
+              f.map {
+                case Some(t: Throwable) ⇒ HttpResponse(status = StatusCodes.InternalServerError, entity = t.getMessage)
+                case _ ⇒ HttpResponse(status = StatusCodes.OK, entity = s"$key is put")
+              }
+            }
+        }
+      }
+    }
+  }
 
   def run(config: CoreConfig, host: String, port: Int): Unit = {
     val serverApp = new SimplePharaohApp {
@@ -103,8 +126,14 @@ trait ServeCommand extends SimplePharaohApp {
         case NonFatal(x) ⇒ complete(HttpResponse(status = StatusCodes.InternalServerError, entity = x.getMessage))
       }
     }
-    val actor = serverApp.system.actorOf(DownloadActor.props)
-    serverApp.register(getRoute(config, actor))
+    import serverApp.system
+
+    val getActor = serverApp.system.actorOf(DownloadActor.props)
+    serverApp.register(getRoute(config, getActor))
+
+    val putActor = UploadProxyActor.uploadProxyActorRef(config)(serverApp.system)
+    serverApp.register(putRoute(config, putActor))
+
     serverApp.listen(host, port)
 
     ()
