@@ -11,50 +11,35 @@ package sandwich
 
 import java.io.{InputStream, OutputStream}
 import java.nio.ByteBuffer
-import java.security.MessageDigest
 
 import cats.data.Kleisli
 import cats.effect.IO
-import kernel.sandwich._
-import util._
-
-object Sandwich {
-  // the size of Sandwich-Head is 52 Bytes
-  // [0 - 4): the magic, 'UFS3'
-  // [4 - 12): the create time
-  // [12 - 44): the key of the file
-  // [44 - 52): the body length
-  val HEAD_MAGIC: Array[Byte] = "UFS3".getBytes
-  val HEAD_LENGTH: Int        = 52
-
-  // the size of Sandwich-Tail is 16 Bytes, the hash of the body
-  val HASH_SIZE: Int = 32
-}
+import ufs3.interpreter.layout.{SandwichHeadLayout, SandwichTailLayout}
+import ufs3.interpreter.util._
+import ufs3.kernel.sandwich._
 
 trait SandwichOutInterpreter extends SandwichOut.Handler[Kleisli[IO, SandwichOutInterpreter.Config, ?], OutputStream] {
   case class Buffer(list: List[Byte])
 
   private[this] val cache = AtomicMap[OutputStream, Buffer]
 
-  //todo: sandwich layout should be refactored
-
   def headSize(): Kleisli[IO, SandwichOutInterpreter.Config, Long] = Kleisli { config ⇒
-    IO { Sandwich.HEAD_LENGTH.toLong }
+    IO { SandwichHeadLayout.HEAD_LENGTH.toLong }
   }
 
   def tailSize(): Kleisli[IO, SandwichOutInterpreter.Config, Long] = Kleisli { config ⇒
-    IO { Sandwich.HASH_SIZE.toLong + 8L }
+    IO { SandwichTailLayout.TAIL_LENGTH.toLong }
   }
 
   def head(bb: ByteBuffer, out: OutputStream): Kleisli[IO, SandwichOutInterpreter.Config, Unit] = Kleisli { config ⇒
     IO {
-      if (bb.limit() == Sandwich.HEAD_LENGTH) {
+      if (bb.limit() == SandwichHeadLayout.HEAD_LENGTH) {
         // make cache
         cache += (out → Buffer(List.empty[Byte]))
         //out.write(bb.array())
         // head bytes don't be output
         ()
-      } else throw new java.io.IOException(s"the Sandwich head size SHOULD BE ${Sandwich.HEAD_LENGTH}")
+      } else throw new java.io.IOException(s"the Sandwich head size SHOULD BE ${SandwichHeadLayout.HEAD_LENGTH}")
     }
   }
 
@@ -96,16 +81,15 @@ trait SandwichOutInterpreter extends SandwichOut.Handler[Kleisli[IO, SandwichOut
     IO {
       try {
         val bytes = new Array[Byte](bb.limit())
-        if(bb.position() != 0) bb.flip()
+        if (bb.position() != 0) bb.flip()
         bb.get(bytes)
-        //todo : refactor sandwich layout
-        if (bytes.length == Sandwich.HASH_SIZE + 8) {
+        if (bytes.length == SandwichTailLayout.TAIL_LENGTH) {
           // if has cache, write
           val cached = cache(out)
           if (cached.isDefined) out.write(cached.get.list.toArray)
           //out.write(bytes)
           out.flush()
-        } else throw new java.io.IOException(s"the Sandwich tail size SHOULD BE ${Sandwich.HASH_SIZE}")
+        } else throw new java.io.IOException(s"the Sandwich tail size SHOULD BE ${SandwichTailLayout.TAIL_HASH_SIZE}")
       } finally {
         // remove cache
         cache -= out
@@ -129,14 +113,7 @@ object SandwichOutInterpreter {
 trait SandwichInInterpreter extends SandwichIn.Handler[Kleisli[IO, SandwichInInterpreter.Config, ?], InputStream] {
   def head(key: String, bodyLength: Long): Kleisli[IO, SandwichInInterpreter.Config, ByteBuffer] = Kleisli { config ⇒
     IO {
-      val bb = ByteBuffer.allocate(Sandwich.HEAD_LENGTH)
-      bb.put(Sandwich.HEAD_MAGIC)            // 4bytes magic
-      bb.putLong(System.currentTimeMillis()) // 8bytes create time
-      //val keyHash = MessageDigest.getInstance("MD5").digest(key.getBytes("UTF-8"))
-      bb.put(key.getBytes("iso8859_1"))        // 32bytes key md5 hash
-      bb.putLong(bodyLength) // 8bytes body length
-      bb.flip()
-      bb
+      SandwichHeadLayout(key, bodyLength).head.byteBuffer
     }
   }
 
@@ -146,8 +123,7 @@ trait SandwichInInterpreter extends SandwichIn.Handler[Kleisli[IO, SandwichInInt
       val readed = in.read(buff)
       if (readed != -1) {
         Some(ByteBuffer.wrap(buff, 0, readed))
-      }
-      else {
+      } else {
         None
       }
     }
@@ -157,9 +133,7 @@ trait SandwichInInterpreter extends SandwichIn.Handler[Kleisli[IO, SandwichInInt
   def tail(hash: Array[Byte], bodyLength: Long): Kleisli[IO, SandwichInInterpreter.Config, ByteBuffer] = Kleisli {
     config ⇒
       IO {
-        import ufs3.interpreter.layout.Layout._
-        require(hash.length == Sandwich.HASH_SIZE, s"the Sandwich tail size SHOULD BE ${Sandwich.HASH_SIZE}")
-        ByteBuffer.wrap(hash ++ bodyLength.`8Bytes`.bytes)
+        SandwichTailLayout(hash, bodyLength).tail.byteBuffer
       }
   }
 }
