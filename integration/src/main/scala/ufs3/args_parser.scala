@@ -33,7 +33,9 @@ package object parser {
       freeSpaceUnit: String = "M",
       serveHost: String = "0.0.0.0",
       servePort: Int = 3080,
-      putKey: Option[String] = None
+      putKey: Option[String] = None,
+      backupTarget: Option[String] = None, // Some("localhost:8080")
+      serveMode: String = "read-only" // or read-write
   ) {
     def coreConfig: CoreConfig = new CoreConfig {
       import ufs3.kernel.block.Block.Size._
@@ -121,9 +123,9 @@ package object parser {
           .validate(x ⇒ if (x.exists() && x.isFile) Right(()) else Left(s"not a file: $x"))
           .action((f, c) ⇒ c.copy(putLocalFile = f)),
         opt[String]("key")
-            .abbr("k")
-            .text("set the key of the file in the ufs3, the key should be 32 length")
-            .action((k, c) ⇒ c.copy(putKey = Some(k))),
+          .abbr("k")
+          .text("set the key of the file in the ufs3, the key should be 32 length")
+          .action((k, c) ⇒ c.copy(putKey = Some(k))),
         fillerFileOpt("out", "o"),
         logOpt
       )
@@ -190,7 +192,7 @@ package object parser {
 
     cmd("repair")
       .text("repair: repair the index file")
-        .action((_, c) ⇒ c.copy(cmd = "repair"))
+      .action((_, c) ⇒ c.copy(cmd = "repair"))
       .children(
         opt[String]("idx-size")
           .abbr("is")
@@ -202,10 +204,16 @@ package object parser {
         logOpt
       )
 
-    cmd("serve")
-      .text("serve: start a http server to expose get/put interface")
-      .action((_, c) ⇒ c.copy(cmd = "serve"))
+    cmd("http-server")
+      .text("http-serve: start a http server to expose get/put interface")
+      .action((_, c) ⇒ c.copy(cmd = "http-serve"))
       .children(
+        opt[Unit]("read-write")
+          .abbr("rw")
+          .action((_, c) ⇒ c.copy(serveMode = "read-write")),
+        opt[Unit]("read-only")
+          .abbr("ro")
+          .action((_, c) ⇒ c.copy(serveMode = "read-only")),
         opt[String]("host")
           .text("the host to be listened")
           .action((s, c) ⇒ c.copy(serveHost = s)),

@@ -110,8 +110,10 @@ trait ServeCommand extends SimplePharaohApp {
     }
   }
 
-  def run(config: CoreConfig, host: String, port: Int): Unit = {
+  // mode: read-only | read-write
+  def run(config: CoreConfig, host: String, port: Int, mode: String): Unit = {
     val serverApp = new SimplePharaohApp {
+
       override lazy val welcome: String = """
                                             |    __  __________________
                                             |  / / / / ____/ ___/__  /
@@ -131,9 +133,10 @@ trait ServeCommand extends SimplePharaohApp {
     val getActor = serverApp.system.actorOf(DownloadActor.props)
     serverApp.register(getRoute(config, getActor))
 
-    val putActor = UploadProxyActor.uploadProxyActorRef(config)(serverApp.system)
-    serverApp.register(putRoute(config, putActor))
-
+    if (mode == "read-write") {
+      val putActor = UploadProxyActor.uploadProxyActorRef(config)(serverApp.system)
+      serverApp.register(putRoute(config, putActor))
+    }
     serverApp.listen(host, port)
 
     ()
