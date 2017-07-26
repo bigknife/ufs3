@@ -54,10 +54,19 @@ object PutCommand {
     }
   }
 
-  def writeLocalFile(coreConfig: CoreConfig, file: File): Try[String] = {
+  def repeat(x: String, n: Int): String = {
+    if (n <= 1) x
+    else x + repeat(x, n -1)
+  }
+  def to32str(str: String): String = {
+    if (str.length > 32) str.substring(0, 32)
+    else repeat("0", 32 - str.length) + str
+  }
+
+  def writeLocalFile(coreConfig: CoreConfig, file: File, key: Option[String]): Try[String] = {
     // create key, md5 of file name
-    val key = MessageDigest.getInstance("md5").digest(file.getAbsolutePath.getBytes("UTF-8"))
-      .map("%02x" format _).mkString("")
-    _run(coreConfig, key, new FileInputStream(file)).map(_ ⇒ key)
+    val _key =  key.map(to32str).getOrElse(MessageDigest.getInstance("md5").digest(file.getAbsolutePath.getBytes("UTF-8"))
+      .map("%02x" format _).mkString(""))
+    _run(coreConfig, _key, new FileInputStream(file)).map(_ ⇒ _key)
   }
 }
