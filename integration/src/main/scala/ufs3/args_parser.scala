@@ -32,7 +32,8 @@ package object parser {
       listOrder: String = "desc",
       freeSpaceUnit: String = "M",
       serveHost: String = "0.0.0.0",
-      servePort: Int = 3080
+      servePort: Int = 3080,
+      putKey: Option[String] = None
   ) {
     def coreConfig: CoreConfig = new CoreConfig {
       import ufs3.kernel.block.Block.Size._
@@ -119,6 +120,10 @@ package object parser {
           .text("local file path, should be a valid local file")
           .validate(x ⇒ if (x.exists() && x.isFile) Right(()) else Left(s"not a file: $x"))
           .action((f, c) ⇒ c.copy(putLocalFile = f)),
+        opt[String]("key")
+            .abbr("k")
+            .text("set the key of the file in the ufs3, the key should be 32 length")
+            .action((k, c) ⇒ c.copy(putKey = Some(k))),
         fillerFileOpt("out", "o"),
         logOpt
       )

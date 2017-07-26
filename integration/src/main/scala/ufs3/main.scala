@@ -66,7 +66,7 @@ object Main {
         initLog4j(x.logLevel)
         log.info(s"putting file:${x.putLocalFile}")
         val now = System.currentTimeMillis()
-        PutCommand.writeLocalFile(x.coreConfig, x.putLocalFile) match {
+        PutCommand.writeLocalFile(x.coreConfig, x.putLocalFile, x.putKey) match {
           case Success(key) ⇒
             log.info(
               s"put file:${x.putLocalFile}, the key in ufs3 is $key, time spent: ${System.currentTimeMillis() - now}ms")
