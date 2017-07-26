@@ -34,7 +34,7 @@ object Main {
         case x if x.equalsIgnoreCase("fatal") ⇒ Level.FATAL
         case x if x.equalsIgnoreCase("error") ⇒ Level.ERROR
         case x if x.equalsIgnoreCase("trace") ⇒ Level.TRACE
-        case _                                ⇒ Level.DEBUG
+        case _                                ⇒ Level.INFO
       }
       //create appender
       //configure the appender
@@ -111,6 +111,15 @@ object Main {
           case Success(_) ⇒
           case Failure(t) ⇒
             log.debug(s"calculate free space for index failed", t)
+            log.error(t.getMessage)
+        }
+
+      case Some(x) if x.cmd == "repair" ⇒
+        initLog4j(x.logLevel)
+        RepairCommand.run(x.coreConfig) match {
+          case Success(_) ⇒
+          case Failure(t) ⇒
+            log.debug(s"repair index file failed", t)
             log.error(t.getMessage)
         }
 

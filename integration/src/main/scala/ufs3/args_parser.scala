@@ -24,7 +24,7 @@ package object parser {
       idxSize: String = "",
       file: String = "./ufs3.filler",
       readBufferSize: String = "8K",
-      logLevel: String = "debug",
+      logLevel: String = "info",
       putLocalFile: File = null,
       getLocalFile: File = null,
       getKey: String = null,
@@ -181,6 +181,20 @@ package object parser {
             fillerFileOpt("file", "f"),
             logOpt
           )
+      )
+
+    cmd("repair")
+      .text("repair: repair the index file")
+        .action((_, c) ⇒ c.copy(cmd = "repair"))
+      .children(
+        opt[String]("idx-size")
+          .abbr("is")
+          .required()
+          .text("the block index file size, should end with G, M, K as the unit")
+          .validate(validSize)
+          .action((s, c) ⇒ c.copy(idxSize = s)),
+        fillerFileOpt("file", "f"),
+        logOpt
       )
 
     cmd("serve")

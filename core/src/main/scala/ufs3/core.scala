@@ -129,6 +129,45 @@ package object core {
       } yield idx)
   }
 
+  def repairFildex[F[_]](implicit B: Block[F],
+                         F: Filler[F],
+                         FI: Fildex[F],
+                         L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Unit]] = {
+    Kleisli { config ⇒
+      val path       = config.fillerBlockPath
+      val pathString = path.file.value.getAbsolutePath
+
+      import L._
+      val prog: Id[SOP[F, Unit]] = for {
+        being       ← B.existed(path)
+        _           ← if (!being) throw new IOException(s"file not exists: $pathString") else SOP.pure[F, Unit](())
+        fildexBeing ← B.existed(path.indexPath)
+        _ ← (if (fildexBeing) info(s"index file existed: ${path.indexPath.file.value}")
+             else
+               for {
+                 _ ← warn("index file lost, create a new index file now")
+                 a ← B.create(path.indexPath, config.idxBlockSize)
+                 _ ← FI.init(a)
+                 _ ← info(s"a new index file created and initialized: ${path.indexPath.file.value}")
+               } yield ()): SOP[F, Unit]
+
+        bf    ← B.open(path, FileMode.ReadWrite)
+        bfi   ← B.open(path.indexPath, FileMode.ReadWrite)
+        ff    ← F.check(bf)
+        idxOk ← FI.check(bfi, ff)
+        _ ← (if (idxOk) info("the index file is consistent with filler file, unnecessary to repair.")
+             else {
+               for {
+                 _ ← info("start to repair the index file")
+                 _ ← FI.repair(bfi, ff)
+                 _ ← info("repair successfully!")
+               } yield ()
+             }): SOP[F, Unit]
+      } yield ()
+      prog
+    }
+  }
+
   // startup ufs3
   // 1. open or create a block
   // 2. init or check the block to a filler file
@@ -273,9 +312,8 @@ package object core {
             } yield throw new IllegalArgumentException(s"$key has existed in ufs3")
 
           }
-          _     ← B.seek(out.blockFile.get(), startPos)
+
           headB ← S.head(key, 0) //length can't be detected
-          _     ← B.write(out.blockFile.get(), headB)
           //_        ← BAK.send(headB) //backup
           bodyLength ← {
             def writeBody(md5: MessageDigest, pos: Long): SOP[F, Long] =
@@ -294,8 +332,12 @@ package object core {
                 //_ ← if (obb.nonEmpty) BAK.send(obb.get) else Par.pure[F, Unit](()) // backup body
               } yield nextLength + obb.map(_.limit()).getOrElse(0)
             // 从 startpos + headB 的地方写入
-            writeBody(md, startPos + headB.limit())
+            writeBody(md, startPos +  headB.limit())
           }
+          headB ← S.head(key, bodyLength) //length can't be detected
+          _     ← B.seek(out.blockFile.get(), startPos)
+          _     ← B.write(out.blockFile.get(), headB)
+
           md5   ← SOP.pure[F, String](md.digest().map("%02x".format(_)).mkString(""))
           _     ← debug(s"writed $bodyLength bytes with key = $key, md5 = $md5")
           tailB ← S.tail(md5.getBytes("iso8859_1"), bodyLength)
