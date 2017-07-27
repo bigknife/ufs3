@@ -38,6 +38,7 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
       val in = new PipedInputStream()
       val out = new PipedOutputStream()
       out.connect(in)
+
       ioMap.set(Map(key → (in, out)))
       // handle try
       PutCommand._runWithUfs3(coreConfig, key, in, ufs3.get()) match {
@@ -48,14 +49,22 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
 
     case BackupWriteData(key, data) ⇒
       val (_, out) = ioMap.get()(key)
-      out.write(data.toArray[Byte])
-      println(s"写入文件 $key, ${data.size} 字节")
+      new Thread(new Runnable {
+        def run(): Unit = {
+          println(s"开始 写入文件 $key, ${data.size} 字节")
+          out.write(data.toArray[Byte])
+          println(s"写入文件 $key, ${data.size} 字节")
+        }
+
+      }).start()
+
+
 
     case BackupCompleted(key) ⇒
       println(s"写入完成：$key")
       val (in, out) = ioMap.get()(key)
-      in.close()
-      out.close()
+      //in.close()
+      //out.close()
   }
 }
 
