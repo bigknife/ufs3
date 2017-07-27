@@ -60,8 +60,14 @@ trait PutCommand {
     }
   }
 
-  def _runWithUfs3(coreConfig: CoreConfig, key: String, ins: InputStream, ufs3: UFS3): Try[Unit] = Try {
-    write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig).foldMap(putInterpreter).run(UniConfig())
+  def _runWithUfs3(coreConfig: CoreConfig, key: String, ins: InputStream, ufs3: UFS3): Try[String] = {
+    Try{
+    val p: SOP[WriteApp, String] = write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig)
+
+      p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
+    }
+
+
   }
 
   def repeat(x: String, n: Int): String = {

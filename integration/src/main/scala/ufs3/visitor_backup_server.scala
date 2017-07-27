@@ -10,7 +10,7 @@ package integration
 package command
 package backupserver
 
-import java.io.{PipedInputStream, PipedOutputStream}
+import java.io.{InputStream, PipedInputStream, PipedOutputStream}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
@@ -19,8 +19,26 @@ import com.barcsys.tcp.connection.{Connection, TcpConnector}
 import com.barcsys.tcp.connection.visitor.AbstractConnectionVisitor
 import ufs3.core.data.Data._
 import ufs3.integration.command.backupserver.BackupActor.{BackupCompleted, BackupNewFile, BackupWriteData}
+import ufs3.integration.command.backupserver.PutActor.RunWithUFS3
 
 import scala.util.{Failure, Success}
+
+class PutActor(coreConfig: CoreConfig) extends Actor {
+  def receive: Receive = {
+    case RunWithUFS3(key, in, ufs3) ⇒
+      PutCommand._runWithUfs3(coreConfig, key, in, ufs3) match {
+        case Success(str) ⇒ println(s"put command successfully $str")
+        case Failure(t)   ⇒ t.printStackTrace()
+      }
+      in.close()
+      context stop self
+  }
+}
+
+object PutActor {
+  final case class RunWithUFS3(key: String, in: InputStream, ufs3: UFS3)
+  def props(coreConfig: CoreConfig): Props = Props(new PutActor(coreConfig))
+}
 
 class BackupActor(coreConfig: CoreConfig) extends Actor {
   val ufs3 = new AtomicReference[UFS3]()
@@ -29,42 +47,33 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
     super.preStart()
   }
 
-  val ioMap: AtomicReference[Map[String, (PipedInputStream, PipedOutputStream)]] = new AtomicReference[Map[String, (PipedInputStream, PipedOutputStream)]](Map.empty)
-
+  val ioMap: AtomicReference[Map[String, (PipedInputStream, PipedOutputStream)]] =
+    new AtomicReference[Map[String, (PipedInputStream, PipedOutputStream)]](Map.empty)
+  val writedMap: AtomicReference[Map[String, Long]] = new AtomicReference[Map[String, Long]](Map.empty)
 
   def receive: Receive = {
     case BackupNewFile(key, totalLength) ⇒
       println(s"准备备份新文件：$key, total: $totalLength")
-      val in = new PipedInputStream()
+      val in  = new PipedInputStream()
       val out = new PipedOutputStream()
       out.connect(in)
 
-      ioMap.set(Map(key → (in, out)))
-      // handle try
-      PutCommand._runWithUfs3(coreConfig, key, in, ufs3.get()) match {
-        case Success(_) ⇒ println("put command successfully")
-        case Failure(t) ⇒ t.printStackTrace()
-      }
-      ()
+      ioMap.set(Map(key     → (in, out)))
+      writedMap.set(Map(key → 0))
+      val actorRef = context.actorOf(PutActor.props(coreConfig))
+      actorRef ! RunWithUFS3(key, in, ufs3.get())
 
     case BackupWriteData(key, data) ⇒
       val (_, out) = ioMap.get()(key)
-      new Thread(new Runnable {
-        def run(): Unit = {
-          println(s"开始 写入文件 $key, ${data.size} 字节")
-          out.write(data.toArray[Byte])
-          println(s"写入文件 $key, ${data.size} 字节")
-        }
-
-      }).start()
-
-
+      println(s"开始 写入文件 $key, ${data.size} 字节")
+      out.write(data.toArray[Byte])
+      println(s"写入文件 $key, ${data.size} 字节")
 
     case BackupCompleted(key) ⇒
       println(s"写入完成：$key")
       val (in, out) = ioMap.get()(key)
+      out.close()
       //in.close()
-      //out.close()
   }
 }
 
@@ -78,10 +87,9 @@ object BackupActor {
   def backupActorRef(coreConfig: CoreConfig)(implicit system: ActorSystem): ActorRef = system.actorOf(props(coreConfig))
 }
 
-
 case class Pointer(key: String, writed: Long, total: Long) {
   def completed: Boolean = total == writed
-  def remained: Long = total - writed
+  def remained: Long     = total - writed
 }
 object Pointer {
   val HeadWithKeySize: Int = 44
@@ -101,7 +109,7 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
   import Pointer._
 
   val currentKey: AtomicReference[Option[Pointer]] = new AtomicReference[Option[Pointer]](None)
-  val headBuffer: AtomicReference[ByteString] = new AtomicReference[ByteString](ByteString.empty)
+  val headBuffer: AtomicReference[ByteString]      = new AtomicReference[ByteString](ByteString.empty)
 
   def init(): Unit = {
     currentKey.set(None)
@@ -124,8 +132,6 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
   // 同时连接只能有一个
   val connectionCount = new AtomicInteger(0)
 
-
-
   override def onClosed(connector: TcpConnector[Connection], connection: Connection): Unit = {
     connectionCount.decrementAndGet()
     ()
@@ -135,7 +141,7 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
     if (connectionCount.incrementAndGet() > 1) {
       connection.close()
       ()
-    }else {
+    } else {
       // 初始化
       init()
     }
@@ -159,7 +165,7 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
         if (afterFillHeadBuffer.nonEmpty) {
           // 如果超出totalsize，则递归consume
           val pointer = currentKey.get().get
-          val body = afterFillHeadBuffer.slice(0, pointer.remained.toInt)
+          val body    = afterFillHeadBuffer.slice(0, pointer.remained.toInt)
           actorRef ! BackupActor.BackupWriteData(pointer.key, body)
           //更新currentKey
           val newPointer = pointer.copy(writed = pointer.writed + body.size)
@@ -167,7 +173,7 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
           // 如果afterFill。。。还有剩下的，则递归
           val rest = afterFillHeadBuffer.drop(pointer.total.toInt)
           // 3. 清空headBuffer
-          if(newPointer.completed) {
+          if (newPointer.completed) {
             println("clear----------")
             headBuffer.set(ByteString.empty)
             actorRef ! BackupActor.BackupCompleted(newPointer.key)
