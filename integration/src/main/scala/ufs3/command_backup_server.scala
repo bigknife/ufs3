@@ -16,7 +16,7 @@ import com.barcsys.tcp.connection.buffer.{BufferSettings, IOBufferSettings}
 import com.barcsys.tcp.connection.visitor.{AbstractConnectionVisitor, CloseConnectionVisitor, PangVisitor}
 import com.typesafe.config.{Config, ConfigFactory}
 import pharaoh.LogbackConfExtension
-
+import ufs3.core.data.Data._
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -34,19 +34,20 @@ trait BackupServerCommand {
   implicit val idle: Duration = 1.minute
   implicit val bufSettings: IOBufferSettings = IOBufferSettings(BufferSettings.Default, BufferSettings.Default)
 
-  def run(host: String, port: Int): Future[Unit] = {
+  def run(coreConfig: CoreConfig, host: String, port: Int): Future[Unit] = {
     val server = TcpConnector.createServer(host, port)
     val f = server.startup()
     //register some visitor
     server.registerConnectionVisitor(PangVisitor("PING", "PANG"))
     server.registerConnectionVisitor(CloseConnectionVisitor("quit", "exit"))
-    server.registerConnectionVisitor(new BackupVisitor)
+    server.registerConnectionVisitor(new BackupVisitor(coreConfig))
     f.map(_ ⇒ ())
   }
 
-  class BackupVisitor extends AbstractConnectionVisitor {
+  class BackupVisitor(coreConfig: CoreConfig) extends AbstractConnectionVisitor {
     override def onRead(connector: TcpConnector[Connection], connection: Connection, data: ByteString): ByteString = {
       println(data.utf8String)
+      //PutCommand._run(coreConfig, key, in)
       ByteString.empty
     }
   }

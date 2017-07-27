@@ -12,7 +12,7 @@ package main
 import java.io.File
 
 import scopt.OptionDef
-import ufs3.core.CoreConfig
+import ufs3.core.data.Data._
 import ufs3.kernel.block.Block
 
 import scala.util.{Failure, Success, Try}

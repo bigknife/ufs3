@@ -23,7 +23,7 @@ import ufs3.interpreter.sandwich.{SandwichInInterpreter, SandwichOutInterpreter}
 import ufs3.kernel.log.Log
 import ufs3.kernel.sandwich.{SandwichIn, SandwichOut}
 import ufs3.log.interpreter.LogInterpreter
-
+import ufs3.core.data.Data._
 import scala.language.higherKinds
 import scala.util.Random
 
@@ -118,7 +118,7 @@ object TestFix {
 object StartupTest {
   import TestFix._
   def test(): Unit = {
-
+/*
     val start: SOP[StartupApp, UFS3] = startup[StartupApp].run(coreConfig)
     val app = for {
       ufs3 ← start
@@ -128,13 +128,14 @@ object StartupTest {
     val k = app.foldMap(interpreter)
     k.run(new UniConfig {}).unsafeRunSync()
     println("StartupTest OK")
+    */
   }
 }
 
 object WriteFileTest {
   import TestFix._
   def test(times: Int): Unit = {
-
+/*
     val start = System.currentTimeMillis()
     def key(): String   = {
       val dst = Random.nextString(32).getBytes()
@@ -164,19 +165,22 @@ object WriteFileTest {
     val allSize = app.foldMap(writeAppInterpreter).run(new UniConfig {}).unsafeRunSync()
     val spent = System.currentTimeMillis() - start
     println(s"put $allSize bytes ok. spent: $spent ms, bps: ${allSize / spent.toDouble}")
-
+  */
   }
+
 }
 
 object ReadFileTest {
   import TestFix._
   def test(key: String): Unit = {
+    /*
     val out = new FileOutputStream("/Users/bigknife/Working/tmp/test_out.jpg")
     val app = for {
       ufs3 ← startup[ReadApp].run(coreConfig)
-      _    ← read[ReadApp, OutputStream](key, ufs3, out).run(coreConfig)
+      _    ← readWithKey[ReadApp, OutputStream](key, ufs3, out).run(coreConfig)
     } yield ()
     app.foldMap(readAppInterpreter).run(new UniConfig {}).unsafeRunSync()
+    */
   }
 }
 

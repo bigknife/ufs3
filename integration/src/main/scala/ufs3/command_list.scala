@@ -12,15 +12,15 @@ package command
 import cats.data.{Coproduct, Kleisli}
 import cats.effect.IO
 import sop._
-import ufs3.core.CoreConfig
 import ufs3.integration.config.UniConfig
 import ufs3.kernel.block.Block
 import ufs3.kernel.fildex.Fildex
 import ufs3.kernel.fildex.Fildex.Idx
 import ufs3.kernel.filler.Filler
 import ufs3.kernel.log.Log
-import core._
 import interpreter._
+import ufs3.core.data.Data._
+import ufs3.core.fetch.FetchProgroam._
 
 import scala.util.Try
 
@@ -46,27 +46,29 @@ trait ListCommand {
   private def render(idxs: Vector[Idx]): String = {
     import ufs3.kernel.block.Block.Size._
     val stringTuples =
-      idxs.map(x ⇒ (x.key, x.fileLength.B.toStringWithUnit("M"), x.startPoint.toString, x.endPoint.toString))
+      idxs.map(x ⇒ (x.key, x.uuid, x.fileLength.B.toStringWithUnit("M"), x.startPoint.toString, x.endPoint.toString))
     //find max length
-    val maxLengthTuples = stringTuples.foldLeft(("key".length, "size".length, "start".length, "end".length)) {
-      (acc, n) ⇒
+    val maxLengthTuples =
+      stringTuples.foldLeft(("key".length, "uuid".length, "size".length, "start".length, "end".length)) { (acc, n) ⇒
         (Math.max(acc._1, n._1.length),
          Math.max(acc._2, n._2.length),
          Math.max(acc._3, n._3.length),
-         Math.max(acc._4, n._4.length))
-    }
+         Math.max(acc._4, n._4.length),
+         Math.max(acc._5, n._5.length))
+      }
 
     def strFilling(str: String, length: Int): String = {
       if (str.length < length) strFilling(s"$str ", length - 1)
       else str
     }
 
-    def row(x: (String, String, String, String)) =
+    def row(x: (String, String, String, String, String)) =
       s"${strFilling(x._1, maxLengthTuples._1)}\t" +
         s"${strFilling(x._2, maxLengthTuples._2)}\t" +
         s"${strFilling(x._3, maxLengthTuples._3)}\t" +
-        s"${strFilling(x._4, maxLengthTuples._4)}\r\n"
-    val head = row(("key", "size", "start", "end"))
+        s"${strFilling(x._4, maxLengthTuples._4)}\t" +
+        s"${strFilling(x._5, maxLengthTuples._5)}\r\n"
+    val head = row(("key", "uuid", "size", "start", "end"))
     val body = stringTuples.map(row)
     head + body.mkString("")
   }

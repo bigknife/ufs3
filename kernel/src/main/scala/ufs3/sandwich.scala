@@ -19,20 +19,20 @@ import scala.language.implicitConversions
 import sop._
 
 trait SandwichIn[F[_], In] {
-  def head(key: String, bodyLength: Long): Par[F, ByteBuffer]
+  def head(key: String, uuid: String, bodyLength: Long): Par[F, ByteBuffer]
   def nextBody(in: In): Par[F, Option[ByteBuffer]]
   def tail(hash: Array[Byte], bodyLength: Long): Par[F, ByteBuffer]
 }
 object SandwichIn {
   trait Op[In, A]
-  final case class Head[In](key: String, bodyLength: Long)       extends Op[In, ByteBuffer]
-  final case class NextBody[In](in: In)                          extends Op[In, Option[ByteBuffer]]
-  final case class Tail[In](hash: Array[Byte], bodyLength: Long) extends Op[In, ByteBuffer]
+  final case class Head[In](key: String, uuid: String, bodyLength: Long) extends Op[In, ByteBuffer]
+  final case class NextBody[In](in: In)                                  extends Op[In, Option[ByteBuffer]]
+  final case class Tail[In](hash: Array[Byte], bodyLength: Long)         extends Op[In, ByteBuffer]
 
   class To[F[_], In](implicit IJ: Inject[Op[In, ?], F]) extends SandwichIn[F, In] {
     def nextBody(in: In): Par[F, Option[ByteBuffer]] = liftPar_T[Op[In, ?], F, Option[ByteBuffer]](NextBody[In](in))
-    def head(key: String, bodyLength: Long): Par[F, ByteBuffer] =
-      liftPar_T[Op[In, ?], F, ByteBuffer](Head[In](key, bodyLength))
+    def head(key: String, uuid: String, bodyLength: Long): Par[F, ByteBuffer] =
+      liftPar_T[Op[In, ?], F, ByteBuffer](Head[In](key, uuid, bodyLength))
     def tail(hash: Array[Byte], bodyLength: Long): Par[F, ByteBuffer] =
       liftPar_T[Op[In, ?], F, ByteBuffer](Tail[In](hash, bodyLength))
   }
@@ -42,14 +42,14 @@ object SandwichIn {
   def apply[F[_], In](implicit S: SandwichIn[F, In]): SandwichIn[F, In] = S
 
   trait Handler[M[_], In] extends NT[Op[In, ?], M] {
-    def head(key: String, bodyLength: Long): M[ByteBuffer]
+    def head(key: String, uuid: String, bodyLength: Long): M[ByteBuffer]
     def nextBody(in: In): M[Option[ByteBuffer]]
     def tail(hash: Array[Byte], bodyLength: Long): M[ByteBuffer]
 
     def apply[A](fa: Op[In, A]): M[A] = fa match {
-      case Head(key, bodyLength)  ⇒ head(key, bodyLength)
-      case NextBody(in)           ⇒ nextBody(in)
-      case Tail(hash, bodyLength) ⇒ tail(hash, bodyLength)
+      case Head(key, uuid, bodyLength) ⇒ head(key, uuid, bodyLength)
+      case NextBody(in)                ⇒ nextBody(in)
+      case Tail(hash, bodyLength)      ⇒ tail(hash, bodyLength)
     }
   }
 }

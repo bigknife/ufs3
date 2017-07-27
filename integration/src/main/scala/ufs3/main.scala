@@ -70,9 +70,9 @@ object Main {
         log.info(s"putting file:${x.putLocalFile}")
         val now = System.currentTimeMillis()
         PutCommand.writeLocalFile(x.coreConfig, x.putLocalFile, x.putKey) match {
-          case Success(key) ⇒
+          case Success((key, uuid)) ⇒
             log.info(
-              s"put file:${x.putLocalFile}, the key in ufs3 is $key, time spent: ${System.currentTimeMillis() - now}ms")
+              s"put file:${x.putLocalFile}, the key in ufs3 is $key, uuid in ufs3 is $uuid, time spent: ${System.currentTimeMillis() - now}ms")
           case Failure(t) ⇒
             log.debug(s"put file:${x.putLocalFile} failed", t)
             log.error(t.getMessage)
@@ -82,7 +82,7 @@ object Main {
         initLog4j(x.logLevel)
         log.info(s"getting file of key: ${x.getKey}")
         val now = System.currentTimeMillis()
-        GetCommand.getToLocalFile(x.coreConfig, x.getKey, x.getLocalFile) match {
+        GetCommand.getToLocalFileWithKey(x.coreConfig, x.getKey, x.getLocalFile) match {
           case Success(key) ⇒
             log.info(s"saved file to ${x.getLocalFile}, time spent: ${System.currentTimeMillis() - now}ms")
           case Failure(t) ⇒
@@ -134,7 +134,7 @@ object Main {
       case Some(x) if x.cmd == "backup-server" ⇒
         initLog4j(x.logLevel)
         import scala.concurrent.ExecutionContext.Implicits.global
-        BackupServerCommand.run(x.backupServerHost, x.backupServerPort) onComplete {
+        BackupServerCommand.run(x.coreConfig, x.backupServerHost, x.backupServerPort) onComplete {
           case Success(_) ⇒ log.info(s"start backup server:${x.backupServerHost}:${x.backupServerPort}")
           case Failure(t) ⇒ log.error("start backup server failed", t)
         }

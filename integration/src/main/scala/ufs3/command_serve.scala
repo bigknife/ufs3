@@ -19,7 +19,7 @@ import akka.http.scaladsl.server.Directives._
 import akka.stream.{IOResult, Materializer}
 import akka.stream.scaladsl.{Sink, Source, StreamConverters}
 import akka.util.{ByteString, Timeout}
-import ufs3.core.CoreConfig
+import ufs3.core.data.Data._
 import akka.pattern._
 import ufs3.integration.command.actor.UploadProxyActor
 
@@ -31,7 +31,7 @@ class DownloadActor extends Actor {
 
   def receive: Receive = {
     case DownloadActor.Download(config, key, out, in) ⇒
-      GetCommand._run(config, key, out) match {
+      GetCommand._runWithKey(config, key, out) match {
         case Success(_) ⇒
           out.close()
           in.close()
@@ -81,7 +81,6 @@ trait ServeCommand extends SimplePharaohApp {
             case Success(false) ⇒ HttpResponse(status = StatusCodes.NotFound, entity = s"$key not found")
             case Failure(t)     ⇒ throw t
           }
-
         }
       }
     }

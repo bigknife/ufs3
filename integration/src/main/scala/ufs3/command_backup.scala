@@ -19,12 +19,12 @@ import com.barcsys.tcp.connection.visitor.PingVisitor
 import com.barcsys.tcp.connection.{Connection, TcpConnector}
 import com.typesafe.config.{Config, ConfigFactory}
 import pharaoh.LogbackConfExtension
-import ufs3.core.CoreConfig
+import ufs3.core.data.Data._
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.Try
+
 
 trait BackupCommand {
 
@@ -54,7 +54,7 @@ trait BackupCommand {
               connector.write(headBytes(key, bodyLength))
               val out = new OutputStream {
                 val buffer: ListBuffer[Byte] = ListBuffer.empty
-                val bufSize = 1 * 1024 * 1024 * 4
+                val bufSize: Int = 1 * 1024 * 1024 * 4
                 def write(b: Int): Unit = {
                   if(buffer.size == bufSize) {
                     connector.write(ByteString(buffer.toArray))
@@ -72,7 +72,7 @@ trait BackupCommand {
                   super.close()
                 }
               }
-              GetCommand._run(coreConfig, key, out)
+              GetCommand._runWithKey(coreConfig, key, out)
               out.close()
             case None ⇒ Future.failed(new Exception(s"$key not found in ufs3"))
           }

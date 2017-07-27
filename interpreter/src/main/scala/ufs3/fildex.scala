@@ -74,18 +74,26 @@ trait FildexInterpreter extends Fildex.Handler[Kleisli[IO, FildexInterpreter.Con
     }
   }
 
-  def fetch(key: String, fildex: FildexFile): Kleisli[IO, FildexInterpreter.Config, Option[Fildex.Idx]] = Kleisli {
+  def fetchKey(key: String, fildex: FildexFile): Kleisli[IO, FildexInterpreter.Config, Option[Fildex.Idx]] = Kleisli {
     config ⇒
       IO {
         import RandomFildexFile._
-        fildex.fetchIdx(key)
+        fildex.fetchIdxWithKey(key)
+      }
+  }
+
+  def fetchUuid(uuid: String, fildex: FildexFile): Kleisli[IO, FildexInterpreter.Config, Option[Fildex.Idx]] = Kleisli {
+    config ⇒
+      IO {
+        import RandomFildexFile._
+        fildex.fetchIdxWithUuid(uuid)
       }
   }
 
   def append(bf: FildexFile, idx: Fildex.Idx): Kleisli[IO, FildexInterpreter.Config, FildexFile] = Kleisli { config ⇒
     IO {
       import RandomFildexFile._
-      bf.append(idx.key, idx)
+      bf.append(idx)
     }
   }
 
@@ -154,7 +162,7 @@ trait FildexInterpreter extends Fildex.Handler[Kleisli[IO, FildexInterpreter.Con
             //生成每个Sandwich对应的索引
             val idx = IdxLayout.resolveBytes(buffer.array())
             //写入索引: to store in indexMap and index file also update version and tailPosition int index head
-            val indexFile = RandomFildexFile.from(fildex).append(headLayout.key.stringValue, idx)
+            val indexFile = RandomFildexFile.from(fildex).append(idx)
             repairIndex(end, endPos, indexFile)
           } else fildex
         }

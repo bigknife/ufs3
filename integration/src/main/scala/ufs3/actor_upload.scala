@@ -15,7 +15,7 @@ import java.io.{InputStream, PipedInputStream, PipedOutputStream}
 import akka.actor.{Actor, ActorContext, ActorRef, ActorSystem, Props}
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.{ByteString, Timeout}
-import ufs3.core.CoreConfig
+
 import akka.pattern._
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.StreamConverters
@@ -23,7 +23,7 @@ import akka.stream.scaladsl.StreamConverters
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
-
+import ufs3.core.data.Data._
 
 
 trait UploadProxyActor extends Actor {
