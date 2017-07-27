@@ -22,6 +22,7 @@ import ufs3.kernel.fildex.Fildex
 import ufs3.kernel.filler.Filler
 import ufs3.kernel.log.Log
 import ufs3.integration.interpreter._
+import ufs3.kernel.fildex.Fildex.Idx
 import ufs3.kernel.sandwich.SandwichOut
 
 import scala.util.Try
@@ -48,6 +49,14 @@ object GetCommand {
 
   private[command] def _run(coreConfig: CoreConfig, key: String, out: OutputStream): Try[Unit] = {
     val prog        = getProg(coreConfig, key, out)
+    val interpreter = getInterpreter
+    Try {
+      prog.foldMap(interpreter).run(UniConfig()).unsafeRunSync()
+    }
+  }
+
+  private[command] def _idxOfKey(coreConfig: CoreConfig, key: String): Try[Option[Idx]] = {
+    val prog        = idxOfKey[ReadApp](key).run(coreConfig)
     val interpreter = getInterpreter
     Try {
       prog.foldMap(interpreter).run(UniConfig()).unsafeRunSync()

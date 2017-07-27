@@ -94,6 +94,18 @@ package object core {
     })
   }
 
+  def idxOfKey[F[_]](key: String)(implicit B: Block[F],
+                                  F: Filler[F],
+                                  FI: Fildex[F],
+                                  L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Option[Idx]]] = {
+    openForRead[F].andThen[SOP[F, Option[Idx]]]((x: SOP[F, UFS3]) ⇒
+      for {
+        ufs3 ← x
+        idx ← FI.fetch(key, ufs3.fildexFile.get())
+      } yield idx
+    )
+  }
+
   def freeSpaceOfFildex[F[_]](implicit B: Block[F],
                               F: Filler[F],
                               FI: Fildex[F],
