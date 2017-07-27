@@ -20,6 +20,7 @@ import com.barcsys.tcp.connection.{Connection, TcpConnector}
 import com.typesafe.config.{Config, ConfigFactory}
 import pharaoh.LogbackConfExtension
 import ufs3.core.data.Data._
+import ufs3.interpreter.layout.{SandwichHeadLayout, SandwichTailLayout}
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
@@ -49,9 +50,13 @@ trait BackupCommand {
         Future.successful {
           GetCommand._idxOfKey(coreConfig, key).map {
             case Some(idx) ⇒
-              val bodyLength = 32 + idx.endPoint - idx.startPoint // 32 key + bodyLength is total body length
+              // 1. Magic: "SAND"
+              // 2. BODY_LENGTH, 8 (3#32 + 4#bodylength)
+              // 3. KEY, 32
+              // 4. body stream
+              val bodyLength = 32 + idx.endPoint - idx.startPoint - SandwichHeadLayout.HEAD_LENGTH - SandwichTailLayout.TAIL_LENGTH // 32 key + bodyLength is total body length，还要减去Sandwich头和尾部的字节
               // head is [0, 8) length, [8, 40) key
-              connector.write(headBytes(key, bodyLength))
+              connector.write(headBytes(magic = "SAND", key, bodyLength))
               val out = new OutputStream {
                 val buffer: ListBuffer[Byte] = ListBuffer.empty
                 val bufSize: Int = 1 * 1024 * 1024 * 4
@@ -68,6 +73,7 @@ trait BackupCommand {
                 override def close(): Unit = {
                   if(buffer.nonEmpty) {
                     connector.write(ByteString(buffer.toArray))
+                    buffer.clear()
                   }
                   super.close()
                 }
@@ -80,13 +86,16 @@ trait BackupCommand {
         }
     }
 
-    s.flatMap(_ ⇒ system.terminate().map(_ ⇒ ()))
+    s.flatMap(_ ⇒ {
+      Thread.sleep(Long.MaxValue)
+      system.terminate().map(_ ⇒ ())
+    })
 
   }
 
-  def headBytes(key: String, bodyLength: Long): ByteString = {
+  def headBytes(magic: String, key: String, bodyLength: Long): ByteString = {
     import ufs3.interpreter.layout.Layout._
-    ByteString(bodyLength.`8Bytes`.bytes) ++ ByteString(key)
+    ByteString(magic) ++ ByteString(bodyLength.`8Bytes`.bytes) ++ ByteString(key)
   }
 
   def createBackupServerClient(target: InetSocketAddress): TcpConnector[Connection] = {

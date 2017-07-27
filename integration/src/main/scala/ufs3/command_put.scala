@@ -41,6 +41,11 @@ trait PutCommand {
           (blockInterperter or fillerInterperter)))
   }
 
+  def writableUfs3(coreConfig: CoreConfig): UFS3 = {
+    val p: SOP[WriteApp, UFS3] = openForWrite[WriteApp].run(coreConfig)
+    p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
+  }
+
   private def putProg(coreConfig: CoreConfig, key: String, ins: InputStream): SOP[WriteApp, String] =
     for {
       ufs3 ← openForWrite[WriteApp].run(coreConfig)
@@ -53,6 +58,10 @@ trait PutCommand {
     Try {
       prog.foldMap(interpreter).run(UniConfig()).unsafeRunSync()
     }
+  }
+
+  def _runWithUfs3(coreConfig: CoreConfig, key: String, ins: InputStream, ufs3: UFS3): Try[Unit] = Try {
+    write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig).foldMap(putInterpreter).run(UniConfig())
   }
 
   def repeat(x: String, n: Int): String = {
