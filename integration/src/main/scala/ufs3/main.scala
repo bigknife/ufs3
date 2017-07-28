@@ -10,10 +10,12 @@ package integration
 
 import java.net.InetSocketAddress
 
+import akka.util.Timeout
 import command._
 import org.apache.log4j.{ConsoleAppender, Level, Logger, PatternLayout}
 import main.parser._
 
+import scala.concurrent.Await
 import scala.util.{Failure, Success}
 
 /**
@@ -145,10 +147,16 @@ object Main {
         val s: Array[String] = x.backupTarget.get.split(":")
         val target = new InetSocketAddress(s(0), s(1).toInt)
         import scala.concurrent.ExecutionContext.Implicits.global
-        BackupCommand.backup(x.coreConfig, x.backupKey, target) onComplete {
-          case Success(_) ⇒ log.info(s"backuped file identified by ${x.backupKey}")
-          case Failure(t) ⇒ log.error("backup failed", t)
+        val f = BackupCommand.backup(x.coreConfig, x.backupKey, target)
+        f onComplete {
+          case Success(true) ⇒ log.info(s"backuped file successfully identified by ${x.backupKey}")
+          case Success(false) ⇒ log.info(s"backuped file failed identified by ${x.backupKey}")
+          case Failure(t) ⇒ log.error("backup with exception", t)
         }
+        // timeout
+        import scala.concurrent.duration._
+        Await.result(f, 600.second)
+        ()
 
 
       case Some(_) ⇒ System.err.println("please re-run ufs with --help or -h: ufs3 --help")

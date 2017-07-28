@@ -15,7 +15,7 @@ import java.net.InetSocketAddress
 import akka.actor.ActorSystem
 import akka.util.ByteString
 import com.barcsys.tcp.connection.buffer.{BufferSettings, IOBufferSettings}
-import com.barcsys.tcp.connection.visitor.PingVisitor
+import com.barcsys.tcp.connection.visitor.{AbstractConnectionVisitor, PingVisitor}
 import com.barcsys.tcp.connection.{Connection, TcpConnector}
 import com.typesafe.config.{Config, ConfigFactory}
 import pharaoh.LogbackConfExtension
@@ -23,7 +23,7 @@ import ufs3.core.data.Data._
 import ufs3.interpreter.layout.{SandwichHeadLayout, SandwichTailLayout}
 
 import scala.collection.mutable.ListBuffer
-import scala.concurrent.Future
+import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration._
 
 
@@ -42,12 +42,12 @@ trait BackupCommand {
   implicit val bufSettings: IOBufferSettings = IOBufferSettings(BufferSettings.Default, BufferSettings.Default)
 
   // backup the file identified by the key to target
-  def backup(coreConfig: CoreConfig, key: String, target: InetSocketAddress): Future[Unit] = {
-    val c = createBackupServerClient(target)
-    val s = c.startup().flatMap {
+  def backup(coreConfig: CoreConfig, key: String, target: InetSocketAddress): Future[Boolean] = {
+    val promise = Promise[Boolean]
+    val s = startBackupServerClient(target, promise).flatMap {
       case (connector, _) ⇒
         // query idx of the key, write tcp head
-        Future.successful {
+        val f = Future.successful {
           GetCommand._idxOfKey(coreConfig, key).map {
             case Some(idx) ⇒
               // 1. Magic: "SAND"
@@ -84,13 +84,13 @@ trait BackupCommand {
           }
           ()
         }
+        f.flatMap(_ ⇒ promise.future)
     }
 
-    s.flatMap(_ ⇒ {
-      Thread.sleep(Long.MaxValue)
-      system.terminate().map(_ ⇒ ())
-    })
-
+    for {
+      b ← s
+      _ ← system.terminate()
+    } yield b
   }
 
   def headBytes(magic: String, key: String, bodyLength: Long): ByteString = {
@@ -98,9 +98,22 @@ trait BackupCommand {
     ByteString(magic) ++ ByteString(bodyLength.`8Bytes`.bytes) ++ ByteString(key)
   }
 
-  def createBackupServerClient(target: InetSocketAddress): TcpConnector[Connection] = {
-    val c = TcpConnector.createClient(Vector(target), PingVisitor("PING"))
-    c
+  def startBackupServerClient(target: InetSocketAddress, promise: Promise[Boolean]): Future[(TcpConnector[Connection], Option[Connection])] = {
+    val returnVisitor = new AbstractConnectionVisitor(){
+      override def onRead(connector: TcpConnector[Connection], connection: Connection, data: ByteString): ByteString = {
+        if (data.size == 1) {
+          val code = data.mkString("")
+          promise.success(code == "1")
+          ByteString.empty
+        }
+        else data
+      }
+    }
+    val c = TcpConnector.createClient(Vector(target))
+    val s = c.startup()
+    c.registerConnectionVisitor(PingVisitor("PING"))
+    c.registerConnectionVisitor(returnVisitor)
+    s
   }
 
 }
