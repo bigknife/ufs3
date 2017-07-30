@@ -11,7 +11,8 @@ package command
 package backupserver
 
 import java.io.{InputStream, PipedInputStream, PipedOutputStream}
-import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+import java.security.MessageDigest
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicReference}
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.util.ByteString
@@ -67,18 +68,24 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
   val connectMap: AtomicReference[Map[String, (TcpConnector[Connection], Connection)]] =
     new AtomicReference[Map[String, (TcpConnector[Connection], Connection)]](Map.empty)
 
+  val md5: MessageDigest = MessageDigest.getInstance("md5")
+
   private def init(key: String, connector: TcpConnector[Connection], connection: Connection): Unit = {
-    val in  = new PipedInputStream()
+    val in  = new PipedInputStream(4 * 1024 * 1024)
     val out = new PipedOutputStream()
     out.connect(in)
     ioMap.set(Map(key      → (in, out)))
     writedMap.set(Map(key  → 0))
     connectMap.set(Map(key → (connector, connection)))
+
+    md5.reset()
   }
   private def destroy(): Unit = {
     ioMap.set(Map.empty)
     writedMap.set(Map.empty)
     connectMap.set(Map.empty)
+
+    logger.info(s"md5 is ${md5.digest().map("%02x" format _).mkString("")}")
   }
 
   def receive: Receive = {
@@ -88,16 +95,39 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
       val (in, _)  = ioMap.get()(key)
       val actorRef = context.actorOf(PutActor.props(coreConfig))
       actorRef ! RunWithUFS3(key, in, ufs3.get())
+      /*
+      val _sender = self
+      new Thread(new Runnable {
+        def run(): Unit = {
+          PutCommand._runWithUfs3(coreConfig, key, in, ufs3.get()) match {
+            case Success(str) ⇒
+              logger.debug(s"put command successfully $str")
+              _sender ! WriteCompleted(key, None)
+
+            case Failure(t) ⇒
+              //logger.error("put command failed", t)
+              _sender ! WriteCompleted(key, Some(t))
+          }
+          //in.close()
+          Thread.sleep(Long.MaxValue)
+        }
+      }).start()
+      */
 
     case BackupWriteData(key, data) ⇒
+      logger.debug("Got BackupWriteData message")
       if (ioMap.get().contains(key)) {
         val (_, out) = ioMap.get()(key)
         if (out != null) {
           logger.debug(s"writing $key, ${data.size} Bytes")
-          out.write(data.toArray[Byte])
+          val bytes = data.toArray
+          md5.update(bytes)
+          out.write(bytes)
+          //out.flush()
           logger.debug(s"writed $key, ${data.size} Bytes")
         }
       }
+      else logger.warn("io has closed, can't write any data")
 
     case ReadCompleted(key) ⇒
       if (ioMap.get().contains(key)) {
@@ -105,8 +135,10 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
         logger.info(s"read from client completed：$key")
         out.close()
       }
+      else logger.warn("io has closed, can't read any data")
 
     case WriteCompleted(key, ex) ⇒
+      if (ex.nonEmpty) logger.error("Write completed failed", ex.get)
       logger.info(s"writing complete, $key, ${if (ex.isEmpty) "successfully" else ex.get.getMessage}")
       val (in, _) = ioMap.get()(key)
       in.close()
@@ -159,6 +191,7 @@ object Pointer {
 
 class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends AbstractConnectionVisitor {
   import Pointer._
+  import BackupLogger._
 
   val currentKey: AtomicReference[Option[Pointer]] = new AtomicReference[Option[Pointer]](None)
   val headBuffer: AtomicReference[ByteString]      = new AtomicReference[ByteString](ByteString.empty)
@@ -199,10 +232,13 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
     }
   }
 
+  //val readed = new AtomicLong(0)
+
   override def onRead(connector: TcpConnector[Connection], connection: Connection, data: ByteString): ByteString = {
+    //val l = readed.addAndGet(data.size.toLong)
+    //println(s"本地读取 ${data.size}, 累计: $l")
     // return rest
     def consume(bs: ByteString): ByteString = {
-
       if (bs.isEmpty) bs
       else {
         // 1. 填充headBuffer
@@ -212,6 +248,7 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
           val pointer = Pointer.resolve(headBuffer.get().toArray[Byte])
           currentKey.set(Some(pointer))
           actorRef ! BackupActor.BackupNewFile(pointer.key, pointer.total, connector, connection)
+          logger.info(s"Sent BackupNewFile message: $pointer")
         }
         // 2. 读取body
         if (afterFillHeadBuffer.nonEmpty) {
@@ -219,6 +256,7 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
           val pointer = currentKey.get().get
           val body    = afterFillHeadBuffer.slice(0, pointer.remained.toInt)
           actorRef ! BackupActor.BackupWriteData(pointer.key, body)
+          logger.debug("Sent BackupWriteData message")
           //更新currentKey
           val newPointer = pointer.copy(writed = pointer.writed + body.size)
           currentKey.set(Some(newPointer))
@@ -228,6 +266,7 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
           if (newPointer.completed) {
             headBuffer.set(ByteString.empty)
             actorRef ! BackupActor.ReadCompleted(newPointer.key)
+            logger.debug("Sent ReadCompleted message")
           }
           if (rest.nonEmpty) consume(rest) else ByteString.empty
         } else ByteString.empty
@@ -235,5 +274,6 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
     }
 
     consume(data)
+    //ByteString.empty
   }
 }

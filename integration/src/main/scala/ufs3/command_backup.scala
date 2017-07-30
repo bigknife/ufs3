@@ -11,6 +11,7 @@ package command
 
 import java.io.OutputStream
 import java.net.InetSocketAddress
+import java.security.MessageDigest
 
 import akka.actor.ActorSystem
 import akka.util.ByteString
@@ -25,10 +26,12 @@ import ufs3.interpreter.layout.{SandwichHeadLayout, SandwichTailLayout}
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration._
+import org.apache.log4j.Logger
+
 
 
 trait BackupCommand {
-
+  val logger: Logger = Logger.getLogger("backup")
   def config(): Config = ConfigFactory.parseResources("META-INF/application.conf").withFallback(ConfigFactory.load())
 
   implicit val system: ActorSystem = {
@@ -42,6 +45,7 @@ trait BackupCommand {
   implicit val bufSettings: IOBufferSettings = IOBufferSettings(BufferSettings.Default, BufferSettings.Default)
 
   // backup the file identified by the key to target
+  val md5: MessageDigest = MessageDigest.getInstance("md5")
   def backup(coreConfig: CoreConfig, key: String, target: InetSocketAddress): Future[Boolean] = {
     val promise = Promise[Boolean]
     val s = startBackupServerClient(target, promise).flatMap {
@@ -57,22 +61,29 @@ trait BackupCommand {
               val bodyLength = 32 + idx.endPoint - idx.startPoint - SandwichHeadLayout.HEAD_LENGTH - SandwichTailLayout.TAIL_LENGTH // 32 key + bodyLength is total body length，还要减去Sandwich头和尾部的字节
               // head is [0, 8) length, [8, 40) key
               connector.write(headBytes(magic = "SAND", key, bodyLength))
+              logger.debug("writed backup head")
+              md5.reset()
               val out = new OutputStream {
                 val buffer: ListBuffer[Byte] = ListBuffer.empty
                 val bufSize: Int = 1 * 1024 * 1024 * 4
                 def write(b: Int): Unit = {
                   if(buffer.size == bufSize) {
-                    connector.write(ByteString(buffer.toArray))
+                    val bytes = buffer.toArray
+                    md5.update(bytes)
+                    connector.write(ByteString(bytes))
+                    logger.debug(s"writed $bufSize Bytes")
                     buffer.clear()
-                  }else {
-                    buffer.append(b.toByte)
                   }
+                  buffer.append(b.toByte)
                   ()
                 }
 
                 override def close(): Unit = {
                   if(buffer.nonEmpty) {
-                    connector.write(ByteString(buffer.toArray))
+                    val bytes = buffer.toArray
+                    md5.update(bytes)
+                    connector.write(ByteString(bytes))
+                    logger.debug(s"closeing, rest buffered writed ${buffer.size} Bytes, md5 is ${md5.digest().map("%02x" format _).mkString("")}")
                     buffer.clear()
                   }
                   super.close()

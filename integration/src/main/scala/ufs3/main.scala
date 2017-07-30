@@ -42,7 +42,7 @@ object Main {
       }
       //create appender
       //configure the appender
-      val PATTERN = "%d [%p|%c|%C{1}] %m%n"
+      val PATTERN = "%d [%p|%c] %m%n"
       console.setLayout(new PatternLayout(PATTERN))
       console.setThreshold(level)
       console.activateOptions()
