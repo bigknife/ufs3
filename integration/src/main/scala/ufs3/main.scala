@@ -131,7 +131,12 @@ object Main {
       case Some(x) if x.cmd == "http-server" ⇒
         initLog4j(x.logLevel)
         log.info(s"start http server:${x.serveHost}:${x.servePort}, ${x.serveMode}")
-        ServeCommand.run(x.coreConfig, x.serveHost, x.servePort, x.serveMode)
+        val backupTarget = x.backupTarget.map {
+          str ⇒
+            val s: Array[String] = str.split(":")
+            new InetSocketAddress(s(0), s(1).toInt)
+        }
+        ServeCommand.run(x.coreConfig, x.serveHost, x.servePort, x.serveMode, backupTarget)
 
       case Some(x) if x.cmd == "backup-server" ⇒
         initLog4j(x.logLevel)

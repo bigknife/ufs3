@@ -10,6 +10,7 @@ package integration
 package command
 
 import java.io.{InputStream, OutputStream}
+import java.net.InetSocketAddress
 
 import akka.actor.{Actor, ActorRef, Props}
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
@@ -28,7 +29,6 @@ import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
 class DownloadActor extends Actor {
-
   def receive: Receive = {
     case DownloadActor.Download(config, key, out, in) ⇒
       GetCommand._runWithKey(config, key, out) match {
@@ -65,7 +65,7 @@ trait ServeCommand extends SimplePharaohApp {
             val byteStringSource: Source[ByteString, Future[IOResult]] =
               StreamConverters.fromInputStream(in = () ⇒ {
                 val out = new java.io.PipedOutputStream()
-                val in  = new java.io.PipedInputStream()
+                val in  = new java.io.PipedInputStream(4 * 1024 * 1024)
                 out.connect(in)
                 //todo add actor router
                 //controll reading count
@@ -110,7 +110,7 @@ trait ServeCommand extends SimplePharaohApp {
   }
 
   // mode: read-only | read-write
-  def run(config: CoreConfig, host: String, port: Int, mode: String): Unit = {
+  def run(config: CoreConfig, host: String, port: Int, mode: String, backupTarget: Option[InetSocketAddress]): Unit = {
     val serverApp = new SimplePharaohApp {
 
       override lazy val welcome: String = """
@@ -133,7 +133,7 @@ trait ServeCommand extends SimplePharaohApp {
     serverApp.register(getRoute(config, getActor))
 
     if (mode == "read-write") {
-      val putActor = UploadProxyActor.uploadProxyActorRef(config)(serverApp.system)
+      val putActor = UploadProxyActor.uploadProxyActorRef(config, backupTarget)(serverApp.system)
       serverApp.register(putRoute(config, putActor))
     }
     serverApp.listen(host, port)

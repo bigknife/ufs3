@@ -11,14 +11,16 @@ package command
 package actor
 
 import java.io.{InputStream, PipedInputStream, PipedOutputStream}
+import java.net.InetSocketAddress
+import java.util.concurrent.atomic.AtomicReference
 
 import akka.actor.{Actor, ActorContext, ActorRef, ActorSystem, Props}
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.{ByteString, Timeout}
-
 import akka.pattern._
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.StreamConverters
+import ufs3.core.data.Data
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -33,15 +35,16 @@ trait UploadProxyActor extends Actor {
   implicit val timeout = Timeout(30.minute)
 
   val coreConfig: CoreConfig
+  val backupTarget: Option[InetSocketAddress]
 
   def receive: Receive = {
     case UploadProxyActor.Events.UploadRequest(key, source) ⇒
-      val in = new PipedInputStream()
+      val in = new PipedInputStream(4 * 1024 * 1024)
       val out = new PipedOutputStream()
       // ask Pipeline actor to handle source → out → in
       pipelineStreamActor.ask(PipeLineStreamActor.Events.PipeLineStream(in, out, source))
       // ask Put actor to put in → ufs3
-      val f2 = putActorRef(coreConfig).ask(PutActor.Events.Put(key, in))
+      val f2 = putActorRef(coreConfig, backupTarget).ask(PutActor.Events.Put(key, in))
       import context.dispatcher
 
       val _sender = sender()
@@ -65,14 +68,15 @@ object UploadProxyActor {
     final case class UploadRequest(key: String, source: Source[ByteString, Any])
   }
 
-  def props(_coreConfig: CoreConfig): Props = {
+  def props(_coreConfig: CoreConfig, _backupTarget: Option[InetSocketAddress]): Props = {
     Props(new UploadProxyActor {
       val coreConfig: CoreConfig = _coreConfig
+      val backupTarget: Option[InetSocketAddress] = _backupTarget
     })
   }
 
   //smart constructor
-  def uploadProxyActorRef(coreConfig: CoreConfig)(implicit system: ActorSystem): ActorRef = system.actorOf(props(coreConfig))
+  def uploadProxyActorRef(coreConfig: CoreConfig, backupTarget: Option[InetSocketAddress])(implicit system: ActorSystem): ActorRef = system.actorOf(props(coreConfig, backupTarget))
 }
 
 trait PipeLineStreamActor extends Actor{
@@ -114,16 +118,36 @@ object PipeLineStreamActor {
 trait PutActor extends Actor {
   import PutActor._
   val coreConfig: CoreConfig
+  val backupTarget: Option[InetSocketAddress]
+
+  val ufs3: AtomicReference[UFS3] = new AtomicReference[Data.UFS3]()
+  val backupThread = new AtomicReference[Option[BackupSingleThread]](None)
+
+
+  override def preStart(): Unit = {
+    super.preStart()
+    ufs3.set(PutCommand.writableUfs3(coreConfig))
+    if (backupTarget.isDefined) {
+      val backup = BackupSingleThread(coreConfig, backupTarget)
+      backup.start()
+      backupThread.set(Some(backup))
+    }
+  }
+
   def receive: Receive = {
     case Events.Put(key, ins) ⇒
       val _sender = sender()
 
-      PutCommand._run(coreConfig, key, ins) match {
+      PutCommand._runWithUfs3(coreConfig, key, ins, ufs3.get()) match {
         case Success(_) ⇒ // println("put ok")
           _sender ! None
         case Failure(x) ⇒ //x.printStackTrace()
           _sender ! Some(x)
       }
+
+      // start backup
+      // use a fixed thread pool
+      backupThread.get().foreach(_.backup(key))
       context.stop(self)
   }
 }
@@ -133,8 +157,9 @@ object PutActor {
     final case class Put(key: String, ins: InputStream)
   }
 
-  def props(_coreConfig: CoreConfig): Props = Props(new PutActor {
+  def props(_coreConfig: CoreConfig, _backupTarget: Option[InetSocketAddress]): Props = Props(new PutActor {
     val coreConfig: CoreConfig = _coreConfig
+    val backupTarget: Option[InetSocketAddress] = _backupTarget
   })
-  def putActorRef(coreConfig: CoreConfig)(implicit ac: ActorContext): ActorRef = ac.actorOf(props(coreConfig))
+  def putActorRef(coreConfig: CoreConfig, _backupTarget: Option[InetSocketAddress])(implicit ac: ActorContext): ActorRef = ac.actorOf(props(coreConfig, _backupTarget))
 }

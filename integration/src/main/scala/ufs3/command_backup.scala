@@ -83,7 +83,7 @@ trait BackupCommand {
                     val bytes = buffer.toArray
                     md5.update(bytes)
                     connector.write(ByteString(bytes))
-                    logger.debug(s"closeing, rest buffered writed ${buffer.size} Bytes, md5 is ${md5.digest().map("%02x" format _).mkString("")}")
+                    logger.debug(s"closing, rest buffered writed ${buffer.size} Bytes, md5 is ${md5.digest().map("%02x" format _).mkString("")}")
                     buffer.clear()
                   }
                   super.close()

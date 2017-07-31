@@ -21,10 +21,10 @@ trait UniConfig {
   def fildexConfig: FildexInterpreter.Config = new FildexInterpreter.Config {}
   def logConfig: LogInterpreter.Config       = LogInterpreter.config()
   def sandwichInConfig: SandwichInInterpreter.Config = new SandwichInInterpreter.Config {
-    def inputBufferSize: Int = 8192
+    def inputBufferSize: Int = 4 * 1024 * 1024
   }
   def sanwichOutConfig: SandwichOutInterpreter.Config = new SandwichOutInterpreter.Config {
-    def outputBufferSize: Long = 8192
+    def outputBufferSize: Long = 4 * 1024 * 1024
   }
 }
 

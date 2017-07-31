@@ -40,7 +40,7 @@ trait BackupServerCommand {
     val server = TcpConnector.createServer(host, port)
     val f      = server.startup()
     //register some visitor
-    server.registerConnectionVisitor(PangVisitor("PING", "PANG"))
+    server.registerConnectionVisitor(PangVisitor("PING\r\n", "PANG\r\n"))
     server.registerConnectionVisitor(CloseConnectionVisitor("quit", "exit"))
     server.registerConnectionVisitor(new BackupVisitor(coreConfig, BackupActor.backupActorRef(coreConfig)))
     f.map(_ ⇒ ())

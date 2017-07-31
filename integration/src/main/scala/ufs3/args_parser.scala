@@ -39,6 +39,7 @@ package object parser {
       backupServerHost: String = "0.0.0.0",
       backupServerPort: Int = 3081,
       backupKey: String = ""
+
   ) {
     def coreConfig: CoreConfig = new CoreConfig {
       import ufs3.kernel.block.Block.Size._
@@ -223,6 +224,10 @@ package object parser {
         opt[Int]("port")
           .text("the port to be listened")
           .action((s, c) ⇒ c.copy(servePort = s)),
+        opt[String]("backup-target")
+            .text("the backup server address, like localhost:3081")
+            .abbr("bt")
+            .action((s, c) ⇒ c.copy(backupTarget = Some(s))),
         fillerFileOpt("file", "f"),
         logOpt
       )
@@ -246,6 +251,7 @@ package object parser {
       .action((_, c) ⇒ c.copy(cmd = "backup"))
       .children(
         opt[String]("target")
+            .required()
           .abbr("t")
           .text("target socket address of the UFS3 backup server, eg: localhost:3081")
           .action((s, c) ⇒ c.copy(backupTarget = Some(s))),
