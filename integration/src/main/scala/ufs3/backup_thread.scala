@@ -29,7 +29,7 @@ import ufs3.interpreter.layout.{SandwichHeadLayout, SandwichTailLayout}
 
 import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
@@ -90,10 +90,13 @@ trait BackupSingleThread {
             // 4. body stream
             val bodyLength = 32 + idx.endPoint - idx.startPoint - SandwichHeadLayout.HEAD_LENGTH - SandwichTailLayout.TAIL_LENGTH // 32 key + bodyLength is total body length，还要减去Sandwich头和尾部的字节
             // head is [0, 8) length, [8, 40) key
+            writeUntilSuccess(_connector.get, _connection, BackupCommand.headBytes(magic = "SAND", event.key, bodyLength))
+            /*
           _connector.get.write(BackupCommand.headBytes(magic = "SAND", event.key, bodyLength), Some(_connection.get)) onComplete {
             case Success(x) ⇒ logger.debug(s"write to ${_connection.get}, success? $x")
             case Failure(t) ⇒ logger.error(s"write to ${_connection.get} failed", t)
           }
+          */
             logger.debug("writed backup head")
             md5.reset()
             val out = new OutputStream {
@@ -103,10 +106,13 @@ trait BackupSingleThread {
                 if (buffer.size == bufSize) {
                   val bytes = buffer.toArray
                   md5.update(bytes)
+                  writeUntilSuccess(_connector.get, _connection, ByteString(bytes))
+                  /*
                   _connector.get.write(ByteString(bytes), Some(_connection.get)) onComplete {
                     case Success(x) ⇒ logger.debug(s"write to ${_connection.get}, success? $x")
                     case Failure(t) ⇒ logger.error(s"write to ${_connection.get} failed", t)
                   }
+                  */
                   logger.debug(s"writed $bufSize Bytes")
                   buffer.clear()
                 }
@@ -118,10 +124,13 @@ trait BackupSingleThread {
                 if (buffer.nonEmpty) {
                   val bytes = buffer.toArray
                   md5.update(bytes)
+                  writeUntilSuccess(_connector.get, _connection, ByteString(bytes))
+                  /*
                   _connector.get.write(ByteString(bytes), Some(_connection.get)) onComplete {
                     case Success(x) ⇒ logger.debug(s"write to ${_connection.get}, success? $x")
                     case Failure(t) ⇒ logger.error(s"write to ${_connection.get} failed", t)
                   }
+                  */
                   logger.debug(
                     s"closing, rest buffered writed ${buffer.size} Bytes, md5 is ${md5.digest().map("%02x" format _).mkString("")}")
                   buffer.clear()
@@ -141,6 +150,24 @@ trait BackupSingleThread {
 
     }
   })
+
+  //todo 需要优化
+  private def writeUntilSuccess(connector: TcpConnector[Connection], connection: Option[Connection], bs: ByteString): Unit = {
+    val f = connector.write(bs, connection)
+    try {
+      val res = Await.result(f, Duration.Inf)
+      if (!res) {
+        logger.warn(s"write to $connection return false, will retry after 1.sec")
+        Thread.sleep(1000)
+        writeUntilSuccess(connector, connection, bs)
+      }
+    } catch {
+      case t: java.lang.RuntimeException if t.getMessage contains "output buffer is overflow" ⇒
+        logger.warn(s"write to $connection failed, will retry after 1.sec")
+        Thread.sleep(1000)
+        writeUntilSuccess(connector, connection, bs)
+    }
+  }
 
   def backup(key: String): Unit = {
     queue.put(BackupEvent(key))
@@ -176,6 +203,13 @@ trait BackupSingleThread {
     c.registerConnectionVisitor(new AbstractConnectionVisitor {
       override def onClosed(connector: TcpConnector[Connection], connection: Connection): Unit = {
         logger.warn(s"connection closed: $connection")
+      }
+    })
+    c.registerConnectionVisitor(new AbstractConnectionVisitor {
+      override def onConnected(connector: TcpConnector[Connection], connection: Connection): Unit = {
+        logger.info(s"connected to $connection")
+        tcpConnection.set(Some(connection))
+        tcpConnector.set(Some(connector))
       }
     })
     s
