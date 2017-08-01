@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicReference
 import akka.actor.ActorSystem
 import akka.util.ByteString
 import com.barcsys.tcp.connection.buffer.{BufferSettings, IOBufferSettings}
-import com.barcsys.tcp.connection.visitor.{AutoReconnectVisitor, PingVisitor}
+import com.barcsys.tcp.connection.visitor.{AbstractConnectionVisitor, AutoReconnectVisitor, PingVisitor}
 import com.barcsys.tcp.connection.{Connection, TcpConnector}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.log4j.Logger
@@ -27,6 +27,7 @@ import ufs3.core.data.Data
 import ufs3.core.data.Data.CoreConfig
 import ufs3.interpreter.layout.{SandwichHeadLayout, SandwichTailLayout}
 
+import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -61,7 +62,20 @@ trait BackupSingleThread {
 
   lazy val thread = new Thread(new Runnable {
     def run(): Unit = {
+      handleQueue(queue)
+    }
+    @tailrec
+    private def handleQueue(queue: LinkedBlockingQueue[BackupEvent]): Unit = {
       val event = queue.take()
+      try {
+        workFor(event)
+      } catch {
+        case t: Throwable ⇒ logger.error(s"work for $event failed", t)
+      }
+
+      handleQueue(queue)
+    }
+    private def workFor(event: BackupEvent): Unit = {
       logger.debug(s"Got backup event: $event")
       //todo backup
       val _connector = tcpConnector.get()
@@ -76,7 +90,10 @@ trait BackupSingleThread {
             // 4. body stream
             val bodyLength = 32 + idx.endPoint - idx.startPoint - SandwichHeadLayout.HEAD_LENGTH - SandwichTailLayout.TAIL_LENGTH // 32 key + bodyLength is total body length，还要减去Sandwich头和尾部的字节
             // head is [0, 8) length, [8, 40) key
-          _connector.get.write(BackupCommand.headBytes(magic = "SAND", event.key, bodyLength), Some(_connection.get))
+          _connector.get.write(BackupCommand.headBytes(magic = "SAND", event.key, bodyLength), Some(_connection.get)) onComplete {
+            case Success(x) ⇒ logger.debug(s"write to ${_connection.get}, success? $x")
+            case Failure(t) ⇒ logger.error(s"write to ${_connection.get} failed", t)
+          }
             logger.debug("writed backup head")
             md5.reset()
             val out = new OutputStream {
@@ -86,7 +103,10 @@ trait BackupSingleThread {
                 if (buffer.size == bufSize) {
                   val bytes = buffer.toArray
                   md5.update(bytes)
-                  _connector.get.write(ByteString(bytes), Some(_connection.get))
+                  _connector.get.write(ByteString(bytes), Some(_connection.get)) onComplete {
+                    case Success(x) ⇒ logger.debug(s"write to ${_connection.get}, success? $x")
+                    case Failure(t) ⇒ logger.error(s"write to ${_connection.get} failed", t)
+                  }
                   logger.debug(s"writed $bufSize Bytes")
                   buffer.clear()
                 }
@@ -98,7 +118,10 @@ trait BackupSingleThread {
                 if (buffer.nonEmpty) {
                   val bytes = buffer.toArray
                   md5.update(bytes)
-                  _connector.get.write(ByteString(bytes), Some(_connection.get))
+                  _connector.get.write(ByteString(bytes), Some(_connection.get)) onComplete {
+                    case Success(x) ⇒ logger.debug(s"write to ${_connection.get}, success? $x")
+                    case Failure(t) ⇒ logger.error(s"write to ${_connection.get} failed", t)
+                  }
                   logger.debug(
                     s"closing, rest buffered writed ${buffer.size} Bytes, md5 is ${md5.digest().map("%02x" format _).mkString("")}")
                   buffer.clear()
@@ -106,7 +129,10 @@ trait BackupSingleThread {
                 super.close()
               }
             }
-            GetCommand._runWithKey(coreConfig, event.key, out)
+            GetCommand._runWithKey(coreConfig, event.key, out) match {
+              case Success(_) ⇒ logger.info(s"backup successfylly for ${event.key}")
+              case Failure(t) ⇒ logger.error(s"backup failed for ${event.key}", t)
+            }
             out.close()
           case None ⇒ Future.failed(new Exception(s"${event.key} not found in ufs3"))
         }
@@ -147,6 +173,11 @@ trait BackupSingleThread {
     val s = c.startup()
     c.registerConnectionVisitor(PingVisitor("PING\r\n"))
     c.registerConnectionVisitor(AutoReconnectVisitor(10.seconds))
+    c.registerConnectionVisitor(new AbstractConnectionVisitor {
+      override def onClosed(connector: TcpConnector[Connection], connection: Connection): Unit = {
+        logger.warn(s"connection closed: $connection")
+      }
+    })
     s
   }
 }

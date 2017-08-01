@@ -23,7 +23,7 @@ package object parser {
       blockSize: String = "",
       idxSize: String = "",
       file: String = "./ufs3.filler",
-      readBufferSize: String = "8K",
+      readBufferSize: String = "4M",
       logLevel: String = "info",
       putLocalFile: File = null,
       getLocalFile: File = null,

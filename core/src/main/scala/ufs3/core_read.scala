@@ -55,6 +55,7 @@ trait ReadProgram {
                   bb ← B.read(from.blockFile.get(), toRead.B)
                   _  ← S.outputBody(bb, to)
                   _  ← readBody(pos + toRead, length, remain - toRead)
+                  _ ← info(s"reading and output to S $toRead Bytes, remain $remain Bytes")
                 } yield ()
               } else SOP.pure[F, Unit](())
             } yield ()

@@ -20,13 +20,13 @@ import akka.util.{ByteString, Timeout}
 import akka.pattern._
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.StreamConverters
+import ufs3.core.data
 import ufs3.core.data.Data
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 import ufs3.core.data.Data._
-
 
 trait UploadProxyActor extends Actor {
 
@@ -39,7 +39,7 @@ trait UploadProxyActor extends Actor {
 
   def receive: Receive = {
     case UploadProxyActor.Events.UploadRequest(key, source) ⇒
-      val in = new PipedInputStream(4 * 1024 * 1024)
+      val in  = new PipedInputStream(4 * 1024 * 1024)
       val out = new PipedOutputStream()
       // ask Pipeline actor to handle source → out → in
       pipelineStreamActor.ask(PipeLineStreamActor.Events.PipeLineStream(in, out, source))
@@ -70,16 +70,17 @@ object UploadProxyActor {
 
   def props(_coreConfig: CoreConfig, _backupTarget: Option[InetSocketAddress]): Props = {
     Props(new UploadProxyActor {
-      val coreConfig: CoreConfig = _coreConfig
+      val coreConfig: CoreConfig                  = _coreConfig
       val backupTarget: Option[InetSocketAddress] = _backupTarget
     })
   }
 
   //smart constructor
-  def uploadProxyActorRef(coreConfig: CoreConfig, backupTarget: Option[InetSocketAddress])(implicit system: ActorSystem): ActorRef = system.actorOf(props(coreConfig, backupTarget))
+  def uploadProxyActorRef(coreConfig: CoreConfig, backupTarget: Option[InetSocketAddress])(
+      implicit system: ActorSystem): ActorRef = system.actorOf(props(coreConfig, backupTarget))
 }
 
-trait PipeLineStreamActor extends Actor{
+trait PipeLineStreamActor extends Actor {
   import PipeLineStreamActor._
 
   implicit val materializer = ActorMaterializer()
@@ -90,14 +91,17 @@ trait PipeLineStreamActor extends Actor{
       //todo use another blocking ec
       import context.dispatcher
       val _sender = sender()
-      source.runWith(sink).map(ioResult ⇒ {
-        _sender ! 0
-        context.stop(self)
-      }).recover{
-        case t: Throwable ⇒
+      source
+        .runWith(sink)
+        .map(ioResult ⇒ {
           _sender ! 0
-          context stop self
-      }
+          context.stop(self)
+        })
+        .recover {
+          case t: Throwable ⇒
+            _sender ! 0
+            context stop self
+        }
       ()
 
   }
@@ -120,25 +124,34 @@ trait PutActor extends Actor {
   val coreConfig: CoreConfig
   val backupTarget: Option[InetSocketAddress]
 
-  val ufs3: AtomicReference[UFS3] = new AtomicReference[Data.UFS3]()
-  val backupThread = new AtomicReference[Option[BackupSingleThread]](None)
-
-
-  override def preStart(): Unit = {
-    super.preStart()
-    ufs3.set(PutCommand.writableUfs3(coreConfig))
-    if (backupTarget.isDefined) {
-      val backup = BackupSingleThread(coreConfig, backupTarget)
-      backup.start()
-      backupThread.set(Some(backup))
+  lazy val ufs3: UFS3 = {
+    if (ufs3Holder.get().isDefined) ufs3Holder.get().get
+    else {
+      val _u = PutCommand.writableUfs3(coreConfig)
+      ufs3Holder.set(Some(_u))
+      _u
     }
+  }
+  lazy val backupThread: AtomicReference[Option[BackupSingleThread]] = {
+    if (backupThreadHolder.get().isDefined) backupThreadHolder
+    else {
+      backupThreadHolder.set({
+        backupTarget.map(_ ⇒ {
+          val backup = BackupSingleThread(coreConfig, backupTarget)
+          backup.start()
+          backup
+        })
+      })
+      backupThreadHolder
+    }
+
   }
 
   def receive: Receive = {
     case Events.Put(key, ins) ⇒
       val _sender = sender()
 
-      PutCommand._runWithUfs3(coreConfig, key, ins, ufs3.get()) match {
+      PutCommand._runWithUfs3(coreConfig, key, ins, ufs3) match {
         case Success(_) ⇒ // println("put ok")
           _sender ! None
         case Failure(x) ⇒ //x.printStackTrace()
@@ -157,9 +170,14 @@ object PutActor {
     final case class Put(key: String, ins: InputStream)
   }
 
-  def props(_coreConfig: CoreConfig, _backupTarget: Option[InetSocketAddress]): Props = Props(new PutActor {
-    val coreConfig: CoreConfig = _coreConfig
-    val backupTarget: Option[InetSocketAddress] = _backupTarget
-  })
-  def putActorRef(coreConfig: CoreConfig, _backupTarget: Option[InetSocketAddress])(implicit ac: ActorContext): ActorRef = ac.actorOf(props(coreConfig, _backupTarget))
+  val backupThreadHolder: AtomicReference[Option[BackupSingleThread]] = new AtomicReference[Option[BackupSingleThread]](None)
+  val ufs3Holder: AtomicReference[Option[UFS3]] = new AtomicReference[Option[data.Data.UFS3]](None)
+
+  def props(_coreConfig: CoreConfig, _backupTarget: Option[InetSocketAddress]): Props =
+    Props(new PutActor {
+      val coreConfig: CoreConfig                  = _coreConfig
+      val backupTarget: Option[InetSocketAddress] = _backupTarget
+    })
+  def putActorRef(coreConfig: CoreConfig, _backupTarget: Option[InetSocketAddress])(
+      implicit ac: ActorContext): ActorRef = ac.actorOf(props(coreConfig, _backupTarget))
 }

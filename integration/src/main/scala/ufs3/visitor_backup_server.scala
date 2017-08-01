@@ -148,9 +148,9 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
       val code = if (ex.isEmpty) 1.toByte else 0.toByte
       import scala.concurrent.ExecutionContext.Implicits.global
       connector.write(ByteString(code), Some(connection)).onComplete {
-        case Success(true) ⇒ logger.info(s"write back to $connection successfully"); connection.close()
-        case Success(false) ⇒ logger.info(s"write back to $connection failed"); connection.close()
-        case Failure(t) ⇒ logger.error(s"write back to $connection exception", t); connection.close()
+        case Success(true) ⇒ logger.info(s"write back to $connection successfully")
+        case Success(false) ⇒ logger.info(s"write back to $connection failed")
+        case Failure(t) ⇒ logger.error(s"write back to $connection exception", t)
       }
       destroy()
 
