@@ -22,26 +22,29 @@ import akka.stream.scaladsl.{Sink, Source, StreamConverters}
 import akka.util.{ByteString, Timeout}
 import ufs3.core.data.Data._
 import akka.pattern._
+import org.apache.log4j.Logger
 import ufs3.integration.command.actor.UploadProxyActor
 
 import scala.concurrent.Future
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
+object DownloadLogger {
+  val logger: Logger = Logger.getLogger("download")
+}
 
 class DownloadActor extends Actor {
+  import DownloadLogger.logger._
   def receive: Receive = {
     case DownloadActor.Download(config, key, out, in) ⇒
       GetCommand._runWithKey(config, key, out) match {
         case Success(_) ⇒
+          info("GetCommand succeeded")
           out.close()
-          in.close()
 
         case Failure(t) ⇒
-          //todo add log
-          t.printStackTrace()
+          error("GetCommand failed", t)
           out.write(t.getMessage.getBytes("utf-8"))
           out.close()
-          in.close()
       }
   }
 }
@@ -72,6 +75,7 @@ trait ServeCommand extends SimplePharaohApp {
                 actor ! DownloadActor.Download(config, key, out, in)
                 in
               })
+
             val entity = HttpEntity.Chunked.fromData(ContentTypes.`application/octet-stream`, chunks = byteStringSource)
             HttpResponse(status = StatusCodes.OK, entity = entity)
           }
