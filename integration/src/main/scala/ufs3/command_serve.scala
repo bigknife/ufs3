@@ -10,6 +10,7 @@ package integration
 package command
 
 import java.io.{InputStream, OutputStream}
+import java.net.InetSocketAddress
 
 import akka.actor.{Actor, ActorRef, Props}
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
@@ -19,7 +20,7 @@ import akka.http.scaladsl.server.Directives._
 import akka.stream.{IOResult, Materializer}
 import akka.stream.scaladsl.{Sink, Source, StreamConverters}
 import akka.util.{ByteString, Timeout}
-import ufs3.core.CoreConfig
+import ufs3.core.data.Data._
 import akka.pattern._
 import ufs3.integration.command.actor.UploadProxyActor
 
@@ -28,10 +29,9 @@ import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
 class DownloadActor extends Actor {
-
   def receive: Receive = {
     case DownloadActor.Download(config, key, out, in) ⇒
-      GetCommand._run(config, key, out) match {
+      GetCommand._runWithKey(config, key, out) match {
         case Success(_) ⇒
           out.close()
           in.close()
@@ -65,7 +65,7 @@ trait ServeCommand extends SimplePharaohApp {
             val byteStringSource: Source[ByteString, Future[IOResult]] =
               StreamConverters.fromInputStream(in = () ⇒ {
                 val out = new java.io.PipedOutputStream()
-                val in  = new java.io.PipedInputStream()
+                val in  = new java.io.PipedInputStream(4 * 1024 * 1024)
                 out.connect(in)
                 //todo add actor router
                 //controll reading count
@@ -81,7 +81,6 @@ trait ServeCommand extends SimplePharaohApp {
             case Success(false) ⇒ HttpResponse(status = StatusCodes.NotFound, entity = s"$key not found")
             case Failure(t)     ⇒ throw t
           }
-
         }
       }
     }
@@ -110,8 +109,10 @@ trait ServeCommand extends SimplePharaohApp {
     }
   }
 
-  def run(config: CoreConfig, host: String, port: Int): Unit = {
+  // mode: read-only | read-write
+  def run(config: CoreConfig, host: String, port: Int, mode: String, backupTarget: Option[InetSocketAddress]): Unit = {
     val serverApp = new SimplePharaohApp {
+
       override lazy val welcome: String = """
                                             |    __  __________________
                                             |  / / / / ____/ ___/__  /
@@ -131,9 +132,10 @@ trait ServeCommand extends SimplePharaohApp {
     val getActor = serverApp.system.actorOf(DownloadActor.props)
     serverApp.register(getRoute(config, getActor))
 
-    val putActor = UploadProxyActor.uploadProxyActorRef(config)(serverApp.system)
-    serverApp.register(putRoute(config, putActor))
-
+    if (mode == "read-write") {
+      val putActor = UploadProxyActor.uploadProxyActorRef(config, backupTarget)(serverApp.system)
+      serverApp.register(putRoute(config, putActor))
+    }
     serverApp.listen(host, port)
 
     ()

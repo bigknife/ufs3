@@ -15,7 +15,7 @@ import java.security.MessageDigest
 import cats.data.{Coproduct, Kleisli}
 import cats.effect.IO
 import sop._
-import ufs3.core._
+import ufs3.core.data.Data._
 import ufs3.integration.config.UniConfig
 import ufs3.kernel.block.Block
 import ufs3.kernel.fildex.Fildex
@@ -23,10 +23,11 @@ import ufs3.kernel.filler.Filler
 import ufs3.kernel.log.Log
 import ufs3.integration.interpreter._
 import ufs3.kernel.sandwich.SandwichIn
-
+import ufs3.core.open.OpenProgram._
+import ufs3.core.write.WriteProgam._
 import scala.util.Try
 
-object PutCommand {
+trait PutCommand {
   type App1[A]       = Coproduct[Block.Op, Filler.Op, A]
   type App2[A]       = Coproduct[Log.Op, App1, A]
   type StartupApp[A] = Coproduct[Fildex.Op, App2, A]
@@ -40,18 +41,33 @@ object PutCommand {
           (blockInterperter or fillerInterperter)))
   }
 
-  private def putProg(coreConfig: CoreConfig, key: String, ins: InputStream): SOP[WriteApp, Unit] =
+  def writableUfs3(coreConfig: CoreConfig): UFS3 = {
+    val p: SOP[WriteApp, UFS3] = openForWrite[WriteApp].run(coreConfig)
+    p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
+  }
+
+  private def putProg(coreConfig: CoreConfig, key: String, ins: InputStream): SOP[WriteApp, String] =
     for {
       ufs3 ← openForWrite[WriteApp].run(coreConfig)
-      _    ← write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig)
-    } yield ()
+      uuid    ← write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig)
+    } yield uuid
 
-  def _run(coreConfig: CoreConfig, key: String, ins: InputStream): Try[Unit] = {
+  def _run(coreConfig: CoreConfig, key: String, ins: InputStream): Try[String] = {
     val prog = putProg(coreConfig, key, ins)
     val interpreter = putInterpreter
     Try {
       prog.foldMap(interpreter).run(UniConfig()).unsafeRunSync()
     }
+  }
+
+  def _runWithUfs3(coreConfig: CoreConfig, key: String, ins: InputStream, ufs3: UFS3): Try[String] = {
+    Try{
+    val p: SOP[WriteApp, String] = write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig)
+
+      p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
+    }
+
+
   }
 
   def repeat(x: String, n: Int): String = {
@@ -63,10 +79,12 @@ object PutCommand {
     else repeat("0", 32 - str.length) + str
   }
 
-  def writeLocalFile(coreConfig: CoreConfig, file: File, key: Option[String]): Try[String] = {
+  // return (key, uuid) tuple2
+  def writeLocalFile(coreConfig: CoreConfig, file: File, key: Option[String]): Try[(String, String)] = {
     // create key, md5 of file name
     val _key =  key.map(to32str).getOrElse(MessageDigest.getInstance("md5").digest(file.getAbsolutePath.getBytes("UTF-8"))
       .map("%02x" format _).mkString(""))
-    _run(coreConfig, _key, new FileInputStream(file)).map(_ ⇒ _key)
+    _run(coreConfig, _key, new FileInputStream(file)).map(x ⇒ (_key, x))
   }
 }
+object PutCommand extends PutCommand

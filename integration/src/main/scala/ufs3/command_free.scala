@@ -12,15 +12,15 @@ package command
 import cats.data.{Coproduct, Kleisli}
 import cats.effect.IO
 import sop._
-import ufs3.core._
 import ufs3.integration.config.UniConfig
 import ufs3.integration.interpreter._
 import ufs3.kernel.block.Block
 import ufs3.kernel.fildex.Fildex
 import ufs3.kernel.filler.Filler
 import ufs3.kernel.log.Log
-
 import scala.util.Try
+import ufs3.core.data.Data._
+import ufs3.core.freespace.FreeSpaceProgram._
 
 trait FreeCommand {
   type App1[A]    = Coproduct[Block.Op, Filler.Op, A]

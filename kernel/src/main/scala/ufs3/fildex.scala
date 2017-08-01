@@ -31,7 +31,8 @@ trait Fildex[F[_]] {
   def load(bf: BlockFile): Par[F, FildexFile]
   def append(bf: FildexFile, idx: Idx): Par[F, FildexFile]
   def close(bf: FildexFile): Par[F, Unit]
-  def fetch(key: String, fildex: FildexFile): Par[F, Option[Idx]]
+  def fetchKey(key: String, fildex: FildexFile): Par[F, Option[Idx]]
+  def fetchUuid(uuid: String, fildex: FildexFile): Par[F, Option[Idx]]
   def query(limit: Int, order: Order, fildex: FildexFile): Par[F, Vector[Idx]]
   def freeSpace(fi: FildexFile): Par[F, Long]
 }
@@ -53,7 +54,8 @@ object Fildex {
   final case class Repair(bf: BlockFile, filler: FillerFile)           extends Op[FildexFile]
   final case class Load(bf: BlockFile)                                 extends Op[FildexFile]
   final case class Close(bf: FildexFile)                               extends Op[Unit]
-  final case class Fetch(key: String, fildex: FildexFile)              extends Op[Option[Idx]]
+  final case class FetchKey(key: String, fildex: FildexFile)              extends Op[Option[Idx]]
+  final case class FetchUuid(uuid: String, fildex: FildexFile)              extends Op[Option[Idx]]
   final case class Query(limit: Int, order: Order, fildex: FildexFile) extends Op[Vector[Idx]]
   final case class FreeSpace(fi: FildexFile) extends Op[Long]
 
@@ -65,7 +67,8 @@ object Fildex {
     def load(bf: BlockFile): Par[F, FildexFile]                       = liftPar_T[Op, F, FildexFile](Load(bf))
     def init(bf: BlockFile): Par[F, FildexFile]                       = liftPar_T[Op, F, FildexFile](Init(bf))
     def close(bf: FildexFile): Par[F, Unit]                           = liftPar_T[Op, F, Unit](Close(bf))
-    def fetch(key: String, fildex: FildexFile): Par[F, Option[Idx]]   = liftPar_T[Op, F, Option[Idx]](Fetch(key, fildex))
+    def fetchKey(key: String, fildex: FildexFile): Par[F, Option[Idx]]   = liftPar_T[Op, F, Option[Idx]](FetchKey(key, fildex))
+    def fetchUuid(uuid: String, fildex: FildexFile): Par[F, Option[Idx]]   = liftPar_T[Op, F, Option[Idx]](FetchUuid(uuid, fildex))
     def query(limit: Int, order: Order, fildex: FildexFile): Par[F, Vector[Idx]] =
       liftPar_T[Op, F, Vector[Idx]](Query(limit, order, fildex))
     def append(bf: FildexFile, idx: Idx): Par[F, FildexFile] = liftPar_T[Op, F, FildexFile](Append(bf, idx))
@@ -83,7 +86,8 @@ object Fildex {
     def init(bf: BlockFile): M[FildexFile]
     def append(bf: FildexFile, idx: Idx): M[FildexFile]
     def close(bf: FildexFile): M[Unit]
-    def fetch(key: String, fildex: FildexFile): M[Option[Idx]]
+    def fetchKey(key: String, fildex: FildexFile): M[Option[Idx]]
+    def fetchUuid(uuid: String, fildex: FildexFile): M[Option[Idx]]
     def query(limit: Int, order: Order, fildex: FildexFile): M[Vector[Idx]]
     def freeSpace(fi: FildexFile): M[Long]
 
@@ -94,7 +98,8 @@ object Fildex {
       case Init(bf)                    ⇒ init(bf)
       case Close(bf)                   ⇒ close(bf)
       case Append(bf, idx)             ⇒ append(bf, idx)
-      case Fetch(key, fildex)          ⇒ fetch(key, fildex)
+      case FetchKey(key, fildex)          ⇒ fetchKey(key, fildex)
+      case FetchUuid(uuid, fildex)          ⇒ fetchUuid(uuid, fildex)
       case Query(limit, order, fildex) ⇒ query(limit, order, fildex)
       case FreeSpace(fi) ⇒ freeSpace(fi)
     }
@@ -105,12 +110,14 @@ object Fildex {
   trait Data
 
   // Index structure
-  final case class Idx(key: String, startPoint: Long, endPoint: Long) {
+  final case class Idx(key: String, uuid: String, startPoint: Long, endPoint: Long) {
     require(key.getBytes("utf-8").length == 32, "fildex index key should be 32bit String")
+    require(uuid.getBytes("utf-8").length == 32, "fildex index uuid should be 32bit String")
 
     def byteBuffer: ByteBuffer = {
-      val bb = ByteBuffer.allocate(48)
+      val bb = ByteBuffer.allocate(80)
       bb.put(key.getBytes("utf-8"))
+      bb.put(uuid.getBytes("utf-8"))
       bb.putLong(startPoint)
       bb.putLong(endPoint)
       bb.flip()

@@ -12,7 +12,7 @@ package main
 import java.io.File
 
 import scopt.OptionDef
-import ufs3.core.CoreConfig
+import ufs3.core.data.Data._
 import ufs3.kernel.block.Block
 
 import scala.util.{Failure, Success, Try}
@@ -23,7 +23,7 @@ package object parser {
       blockSize: String = "",
       idxSize: String = "",
       file: String = "./ufs3.filler",
-      readBufferSize: String = "8K",
+      readBufferSize: String = "4M",
       logLevel: String = "info",
       putLocalFile: File = null,
       getLocalFile: File = null,
@@ -33,7 +33,13 @@ package object parser {
       freeSpaceUnit: String = "M",
       serveHost: String = "0.0.0.0",
       servePort: Int = 3080,
-      putKey: Option[String] = None
+      putKey: Option[String] = None,
+      backupTarget: Option[String] = None, // Some("localhost:8080")
+      serveMode: String = "read-only", // or read-write
+      backupServerHost: String = "0.0.0.0",
+      backupServerPort: Int = 3081,
+      backupKey: String = ""
+
   ) {
     def coreConfig: CoreConfig = new CoreConfig {
       import ufs3.kernel.block.Block.Size._
@@ -121,9 +127,9 @@ package object parser {
           .validate(x ⇒ if (x.exists() && x.isFile) Right(()) else Left(s"not a file: $x"))
           .action((f, c) ⇒ c.copy(putLocalFile = f)),
         opt[String]("key")
-            .abbr("k")
-            .text("set the key of the file in the ufs3, the key should be 32 length")
-            .action((k, c) ⇒ c.copy(putKey = Some(k))),
+          .abbr("k")
+          .text("set the key of the file in the ufs3, the key should be 32 length")
+          .action((k, c) ⇒ c.copy(putKey = Some(k))),
         fillerFileOpt("out", "o"),
         logOpt
       )
@@ -190,7 +196,7 @@ package object parser {
 
     cmd("repair")
       .text("repair: repair the index file")
-        .action((_, c) ⇒ c.copy(cmd = "repair"))
+      .action((_, c) ⇒ c.copy(cmd = "repair"))
       .children(
         opt[String]("idx-size")
           .abbr("is")
@@ -202,16 +208,57 @@ package object parser {
         logOpt
       )
 
-    cmd("serve")
-      .text("serve: start a http server to expose get/put interface")
-      .action((_, c) ⇒ c.copy(cmd = "serve"))
+    cmd("http-server")
+      .text("http-serve: start a http server to expose get/put interface")
+      .action((_, c) ⇒ c.copy(cmd = "http-server"))
       .children(
+        opt[Unit]("read-write")
+          .abbr("rw")
+          .action((_, c) ⇒ c.copy(serveMode = "read-write")),
+        opt[Unit]("read-only")
+          .abbr("ro")
+          .action((_, c) ⇒ c.copy(serveMode = "read-only")),
         opt[String]("host")
           .text("the host to be listened")
           .action((s, c) ⇒ c.copy(serveHost = s)),
         opt[Int]("port")
           .text("the port to be listened")
           .action((s, c) ⇒ c.copy(servePort = s)),
+        opt[String]("backup-target")
+            .text("the backup server address, like localhost:3081")
+            .abbr("bt")
+            .action((s, c) ⇒ c.copy(backupTarget = Some(s))),
+        fillerFileOpt("file", "f"),
+        logOpt
+      )
+
+    cmd("backup-server")
+      .text("backup-server: start backup server")
+      .action((_, c) ⇒ c.copy(cmd = "backup-server"))
+      .children(
+        opt[String]("host")
+          .text("the host backup server to listen on")
+          .action((s, c) ⇒ c.copy(backupServerHost = s)),
+        opt[Int]("port")
+          .text("the port backup server to listen on")
+          .action((s, c) ⇒ c.copy(backupServerPort = s)),
+        fillerFileOpt("file", "f"),
+        logOpt
+      )
+
+    cmd("backup")
+      .text("backup: backup the file identified by key to the target of another UFS3")
+      .action((_, c) ⇒ c.copy(cmd = "backup"))
+      .children(
+        opt[String]("target")
+            .required()
+          .abbr("t")
+          .text("target socket address of the UFS3 backup server, eg: localhost:3081")
+          .action((s, c) ⇒ c.copy(backupTarget = Some(s))),
+        opt[String]("key")
+            .abbr("k")
+            .text("the file key to be backuped")
+            .action((s, c) ⇒ c.copy(backupKey = s)),
         fillerFileOpt("file", "f"),
         logOpt
       )

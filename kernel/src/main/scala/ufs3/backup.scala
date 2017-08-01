@@ -24,7 +24,10 @@ import sop._
 sealed trait Backup[F[_]] {
   def open(): Par[F, Unit]
   def close(): Par[F, Unit]
-  def send(data: ByteBuffer): Par[F, Unit]
+
+  //def startBackup(key: String): Par[F, Unit]
+  def backupData(data: ByteBuffer): Par[F, Unit]
+  //def endBackup(key: String, startPos: Long, endPos: Long): Par[F, Unit]
 }
 object Backup {
   sealed trait Op[A]
@@ -35,7 +38,7 @@ object Backup {
   class To[F[_]](implicit I: Inject[Op, F]) extends Backup[F] {
     override def open(): Par[F, Unit]                 = liftPar_T[Op, F, Unit](Open)
     override def close(): Par[F, Unit]                = liftPar_T[Op, F, Unit](Close)
-    override def send(data: ByteBuffer): Par[F, Unit] = liftPar_T[Op, F, Unit](Send(data))
+    override def backupData(data: ByteBuffer): Par[F, Unit] = liftPar_T[Op, F, Unit](Send(data))
   }
 
   implicit def to[F[_]](implicit I: Inject[Op, F])  = new To[F]

@@ -44,6 +44,7 @@ object Layout {
   case class `52Bytes`(bytes: Bytes)  extends FixedLengthBytes(52)
   case class `60Bytes`(bytes: Bytes)  extends FixedLengthBytes(60)
   case class `64Bytes`(bytes: Bytes)  extends FixedLengthBytes(64)
+  case class `84Bytes`(bytes: Bytes)  extends FixedLengthBytes(84)
   case class `100Bytes`(bytes: Bytes) extends FixedLengthBytes(100)
 
   def longToBytes(l: Long): Array[Byte] = {
@@ -66,6 +67,7 @@ object Layout {
     def `52Bytes`: Layout.`52Bytes`   = Layout.`52Bytes`(ev(a))
     def `60Bytes`: Layout.`60Bytes`   = Layout.`60Bytes`(ev(a))
     def `64Bytes`: Layout.`64Bytes`   = Layout.`64Bytes`(ev(a))
+    def `84Bytes`: Layout.`84Bytes`   = Layout.`84Bytes`(ev(a))
     def `100Bytes`: Layout.`100Bytes` = Layout.`100Bytes`(ev(a))
   }
   implicit def toOp[A](a: A)(implicit ev: A ⇒ Bytes) = new Op[A](a)
@@ -203,26 +205,35 @@ object FildexFileLayout {
 
 object IdxLayout {
   import Layout._
-  val SIZE: Long = 48 // key is 32, startPoint 8, end point 8
+  val SIZE: Long = 80 // key is 32, uuid is 32, startPoint 8, end point 8
   def resolveBytes(bytes: Array[Byte]): Idx = {
     require(bytes.length == SIZE, s"fildex index key item should be $SIZE Bytes")
     val key        = new String(bytes.take(32), "utf-8")
-    val startPoint = bytes.slice(32, 40).`8Bytes`.longValue
-    val endPoint   = bytes.slice(40, 48).`8Bytes`.longValue
-    Idx(key, startPoint, endPoint)
+    val uuid       = new String(bytes.slice(32, 64), "utf-8")
+    val startPoint = bytes.slice(64, 72).`8Bytes`.longValue
+    val endPoint   = bytes.slice(72, 80).`8Bytes`.longValue
+    Idx(key, uuid, startPoint, endPoint)
   }
 }
 
 trait SandwichHeadLayout { outter ⇒
   import Layout._
   def magic: `4Bytes`      = `4Bytes`(SandwichHeadLayout.HEAD_MAGIC)
-  def createTime: `8Bytes` = `8Bytes`(System.currentTimeMillis())
-  def key: `32Bytes`
-  def bodyLength: `8Bytes`
+  val createTime: `8Bytes` = `8Bytes`(System.currentTimeMillis())
+  val key: `32Bytes`
+  val uuid: `32Bytes`
+  val bodyLength: `8Bytes`
 
-  def head: `52Bytes` = `52Bytes`(
-    (magic ++ createTime ++ key ++ bodyLength).bytes
+  def head: `84Bytes` = `84Bytes`(
+    (magic ++ createTime ++ key ++ uuid ++ bodyLength).bytes
   )
+
+  def uuid(bytes: `32Bytes`): SandwichHeadLayout = new SandwichHeadLayout {
+    override val createTime: `8Bytes`                              = `8Bytes`(System.currentTimeMillis())
+    val bodyLength: _root_.ufs3.interpreter.layout.Layout.`8Bytes` = outter.bodyLength
+    val uuid: `32Bytes`                                            = bytes
+    val key: `32Bytes`                                             = outter.key
+  }
 
 }
 
@@ -233,7 +244,7 @@ object SandwichHeadLayout {
   // [12 - 44): the key of the file
   // [44 - 52): the body length
   val HEAD_MAGIC: Array[Byte] = "UFS3".getBytes
-  val HEAD_LENGTH: Int        = 52
+  val HEAD_LENGTH: Int        = 84
   //the size of sandwich created time millis
   val HEAD_CREATE_TIME_SIZE: Int = 8
   //the size  of sandwich name converted to hex string
@@ -243,8 +254,9 @@ object SandwichHeadLayout {
 
   import Layout._
 
-  def apply(_key: String, _bodyLength: Long): SandwichHeadLayout = new SandwichHeadLayout {
+  def apply(_key: String, _uuid: String, _bodyLength: Long): SandwichHeadLayout = new SandwichHeadLayout {
     val key: Layout.`32Bytes`       = _key.`32Bytes`
+    val uuid: `32Bytes`             = _uuid.`32Bytes`
     val bodyLength: Layout.`8Bytes` = _bodyLength.`8Bytes`
   }
 
@@ -254,10 +266,12 @@ object SandwichHeadLayout {
     require(magicByes sameElements HEAD_MAGIC, s"Sandwich head magic must be $HEAD_MAGIC")
     val createTimeBytes = bytes.slice(4, 12)
     val keyBytes        = bytes.slice(12, 44)
-    val bodyLengthBytes = bytes.slice(44, 52)
+    val uuidBytes       = bytes.slice(44, 76)
+    val bodyLengthBytes = bytes.slice(76, 84)
     new SandwichHeadLayout {
       override val createTime: `8Bytes` = createTimeBytes.`8Bytes`
       val key: `32Bytes`                = keyBytes.`32Bytes`
+      val uuid: `32Bytes`               = uuidBytes.`32Bytes`
       val bodyLength: `8Bytes`          = bodyLengthBytes.`8Bytes`
     }
   }

@@ -111,11 +111,12 @@ object SandwichOutInterpreter {
 }
 
 trait SandwichInInterpreter extends SandwichIn.Handler[Kleisli[IO, SandwichInInterpreter.Config, ?], InputStream] {
-  def head(key: String, bodyLength: Long): Kleisli[IO, SandwichInInterpreter.Config, ByteBuffer] = Kleisli { config ⇒
-    IO {
-      SandwichHeadLayout(key, bodyLength).head.byteBuffer
+  def head(key: String, uuid: String, bodyLength: Long): Kleisli[IO, SandwichInInterpreter.Config, ByteBuffer] =
+    Kleisli { config ⇒
+      IO {
+        SandwichHeadLayout(key, uuid, bodyLength).head.byteBuffer
+      }
     }
-  }
 
   def nextBody(in: InputStream): Kleisli[IO, SandwichInInterpreter.Config, Option[ByteBuffer]] = Kleisli { config ⇒
     IO {

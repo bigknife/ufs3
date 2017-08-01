@@ -22,7 +22,8 @@ import interpreter._
 import sop._
 
 import scala.util.Try
-
+import ufs3.core.data.Data._
+import ufs3.core.repair.RepairProgram._
 trait RepairCommand {
   type App1[A]      = Coproduct[Block.Op, Filler.Op, A]
   type App2[A]      = Coproduct[Log.Op, App1, A]
