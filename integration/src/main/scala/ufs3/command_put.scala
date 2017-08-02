@@ -27,7 +27,7 @@ import ufs3.kernel.sandwich.SandwichIn
 import ufs3.core.open.OpenProgram._
 import ufs3.core.write.WriteProgam._
 
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 trait PutCommand {
   type App1[A]       = Coproduct[Block.Op, Filler.Op, A]
@@ -37,7 +37,7 @@ trait PutCommand {
   type WriteApp[A] = Coproduct[SandwichIn.Op[InputStream, ?], StartupApp, A]
 
   // cache the writable ufs3
-  private val ufs3Cache = new AtomicReference[Option[UFS3]]()
+  private val ufs3Cache = new AtomicReference[Option[UFS3]](None)
 
   private val putInterpreter: NT[WriteApp, Kleisli[IO, UniConfig, ?]] = {
     sandwichInInterpreter or
@@ -54,13 +54,13 @@ trait PutCommand {
       ufs3Cache.set(Some(_ufs3))
       _ufs3
     }
-
   }
 
   private def putProg(coreConfig: CoreConfig, key: String, ins: InputStream): SOP[WriteApp, String] =
     for {
       ufs3 ← openForWrite[WriteApp].run(coreConfig)
       uuid ← write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig)
+      _ ← forceToWrite[WriteApp](ufs3).run(coreConfig)
     } yield uuid
 
   def _run(coreConfig: CoreConfig, key: String, ins: InputStream): Try[String] = {
@@ -76,11 +76,22 @@ trait PutCommand {
     p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
   }
 
+  def _ufs3ExistedKey(coreConfig: CoreConfig, key: String, ufs3: UFS3): Boolean = {
+    val p = existedKey[WriteApp](key, ufs3).run(coreConfig)
+    p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
+  }
+
   def _runWithUfs3(coreConfig: CoreConfig, key: String, ins: InputStream, ufs3: UFS3): Try[String] = {
     Try {
       val p: SOP[WriteApp, String] = write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig)
       p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
-    }
+    }.transform(Success(_), {
+      t: Throwable ⇒
+        // 出异常了，则需要让ufs3恢复为可写状态
+        val p: SOP[WriteApp, Unit] = forceToWrite[WriteApp](ufs3).run(coreConfig)
+        p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
+        Failure(t)
+    })
 
   }
 

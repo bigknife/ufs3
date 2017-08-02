@@ -109,15 +109,20 @@ trait ServeCommand extends SimplePharaohApp {
                   case _ ⇒ HttpResponse(status = StatusCodes.OK, entity = s"$key is put")
                 }
               }
-                val ufs3 = PutCommand.writableUfs3(config)
+
+              val ufs3 = PutCommand.writableUfs3(config)
+              if (!PutCommand._ufs3ExistedKey(config, key, ufs3)) {
                 PutCommand._ufs3IsWriting(config, ufs3) match {
-                  case Left(error) ⇒ Future.successful[HttpResponse](
-                    HttpResponse(status = StatusCodes.TooManyRequests, entity = error)
-                  )
+                  case Left(error) ⇒
+                    Future.successful[HttpResponse](
+                      HttpResponse(status = StatusCodes.TooManyRequests, entity = error)
+                    )
                   case Right(_) ⇒ putFile()
                 }
-
-
+              } else
+                Future.successful[HttpResponse](
+                  HttpResponse(status = StatusCodes.Conflict, entity = s"$key has existed")
+                )
             }
         }
       }
