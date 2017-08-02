@@ -68,24 +68,24 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
   val connectMap: AtomicReference[Map[String, (TcpConnector[Connection], Connection)]] =
     new AtomicReference[Map[String, (TcpConnector[Connection], Connection)]](Map.empty)
 
-  val md5: MessageDigest = MessageDigest.getInstance("md5")
+  val md5Map: AtomicReference[Map[String, MessageDigest]] = new AtomicReference[Map[String, MessageDigest]](Map.empty)
 
   private def init(key: String, connector: TcpConnector[Connection], connection: Connection): Unit = {
     val in  = new PipedInputStream(4 * 1024 * 1024)
     val out = new PipedOutputStream()
     out.connect(in)
-    ioMap.set(Map(key      → (in, out)))
-    writedMap.set(Map(key  → 0))
-    connectMap.set(Map(key → (connector, connection)))
-
-    md5.reset()
+    ioMap.set(ioMap.get() + (key           → (in, out)))
+    writedMap.set(writedMap.get() + (key   → 0))
+    connectMap.set(connectMap.get() + (key → (connector, connection)))
+    md5Map.set(md5Map.get() + (key         → MessageDigest.getInstance("md5")))
   }
-  private def destroy(): Unit = {
-    ioMap.set(Map.empty)
-    writedMap.set(Map.empty)
-    connectMap.set(Map.empty)
-
-    logger.info(s"md5 is ${md5.digest().map("%02x" format _).mkString("")}")
+  private def destroy(key: String): Unit = {
+    ioMap.set(ioMap.get() - key)
+    writedMap.set(writedMap.get() - key)
+    connectMap.set(connectMap.get() - key)
+    val md5 = md5Map.get()(key)
+    logger.info(s"md5 for key=$key is ${md5.digest().map("%02x" format _).mkString("")}")
+    md5Map.set(md5Map.get() - key)
   }
 
   def receive: Receive = {
@@ -95,47 +95,25 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
       val (in, _)  = ioMap.get()(key)
       val actorRef = context.actorOf(PutActor.props(coreConfig))
       actorRef ! RunWithUFS3(key, in, ufs3.get())
-      /*
-      val _sender = self
-      new Thread(new Runnable {
-        def run(): Unit = {
-          PutCommand._runWithUfs3(coreConfig, key, in, ufs3.get()) match {
-            case Success(str) ⇒
-              logger.debug(s"put command successfully $str")
-              _sender ! WriteCompleted(key, None)
-
-            case Failure(t) ⇒
-              //logger.error("put command failed", t)
-              _sender ! WriteCompleted(key, Some(t))
-          }
-          //in.close()
-          Thread.sleep(Long.MaxValue)
-        }
-      }).start()
-      */
 
     case BackupWriteData(key, data) ⇒
-      logger.debug("Got BackupWriteData message")
-      if (ioMap.get().contains(key)) {
-        val (_, out) = ioMap.get()(key)
-        if (out != null) {
-          logger.debug(s"writing $key, ${data.size} Bytes")
-          val bytes = data.toArray
-          md5.update(bytes)
-          out.write(bytes)
-          //out.flush()
-          logger.debug(s"writed $key, ${data.size} Bytes")
-        }
+      logger.debug(s"Got BackupWriteData message for key=$key")
+
+      val (_, out) = ioMap.get()(key)
+      if (out != null) {
+        logger.debug(s"writing $key, ${data.size} Bytes")
+        val bytes = data.toArray
+        val md5   = md5Map.get()(key)
+        md5.update(bytes)
+        out.write(bytes)
+        //out.flush()
+        logger.debug(s"writed $key, ${data.size} Bytes")
       }
-      else logger.warn("io has closed, can't write any data")
 
     case ReadCompleted(key) ⇒
-      if (ioMap.get().contains(key)) {
-        val (_, out) = ioMap.get()(key)
-        logger.info(s"read from client completed：$key")
-        out.close()
-      }
-      else logger.warn("io has closed, can't read any data")
+      val (_, out) = ioMap.get()(key)
+      logger.info(s"read from client completed：$key")
+      out.close()
 
     case WriteCompleted(key, ex) ⇒
       if (ex.nonEmpty) logger.error("Write completed failed", ex.get)
@@ -148,11 +126,11 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
       val code = if (ex.isEmpty) 1.toByte else 0.toByte
       import scala.concurrent.ExecutionContext.Implicits.global
       connector.write(ByteString(code), Some(connection)).onComplete {
-        case Success(true) ⇒ logger.info(s"write back to $connection successfully")
+        case Success(true)  ⇒ logger.info(s"write back to $connection successfully")
         case Success(false) ⇒ logger.info(s"write back to $connection failed")
-        case Failure(t) ⇒ logger.error(s"write back to $connection exception", t)
+        case Failure(t)     ⇒ logger.error(s"write back to $connection exception", t)
       }
-      destroy()
+      destroy(key)
 
   }
 }
@@ -256,7 +234,7 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
           val pointer = currentKey.get().get
           val body    = afterFillHeadBuffer.slice(0, pointer.remained.toInt)
           actorRef ! BackupActor.BackupWriteData(pointer.key, body)
-          logger.debug("Sent BackupWriteData message")
+          logger.debug(s"Sent BackupWriteData message: $pointer")
           //更新currentKey
           val newPointer = pointer.copy(writed = pointer.writed + body.size)
           currentKey.set(Some(newPointer))
@@ -266,7 +244,7 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
           if (newPointer.completed) {
             headBuffer.set(ByteString.empty)
             actorRef ! BackupActor.ReadCompleted(newPointer.key)
-            logger.debug("Sent ReadCompleted message")
+            logger.debug(s"Sent ReadCompleted message: $pointer")
           }
           if (rest.nonEmpty) consume(rest) else ByteString.empty
         } else ByteString.empty
