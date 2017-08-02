@@ -43,7 +43,7 @@ class PutActor(coreConfig: CoreConfig) extends Actor {
           //logger.error("put command failed", t)
           _sender ! WriteCompleted(key, Some(t))
       }
-      in.close()
+      //in.close()
       context stop self
   }
 }
@@ -160,7 +160,7 @@ object Pointer {
   def resolve(bytes: Bytes): Pointer = {
     require(bytes.length == HeadWithKeySize, s"backup messages pointer size should be $HeadWithKeySize")
     val magic = bytes.take(4)
-    require(magic sameElements "SAND".getBytes, "backup messages magic should be SAND")
+    require(magic sameElements "SAND".getBytes, s"backup messages magic should be SAND, but ${new String(magic)}")
     val bodyLength = bytes.slice(4, 12).`8Bytes`.longValue
     val key        = new String(bytes.slice(12, 44), "UTF-8")
     Pointer(key, 0, bodyLength - 32) // key的32字节此时已经读取，所以要减去
@@ -232,14 +232,15 @@ class BackupVisitor(coreConfig: CoreConfig, actorRef: ActorRef) extends Abstract
         if (afterFillHeadBuffer.nonEmpty) {
           // 如果超出totalsize，则递归consume
           val pointer = currentKey.get().get
-          val body    = afterFillHeadBuffer.slice(0, pointer.remained.toInt)
+          val remained = pointer.remained.toInt
+          val body    = afterFillHeadBuffer.slice(0, remained)
           actorRef ! BackupActor.BackupWriteData(pointer.key, body)
           logger.debug(s"Sent BackupWriteData message: $pointer")
           //更新currentKey
           val newPointer = pointer.copy(writed = pointer.writed + body.size)
           currentKey.set(Some(newPointer))
           // 如果afterFill。。。还有剩下的，则递归
-          val rest = afterFillHeadBuffer.drop(pointer.total.toInt)
+          val rest = afterFillHeadBuffer.drop(remained)
           // 3. 清空headBuffer
           if (newPointer.completed) {
             headBuffer.set(ByteString.empty)
