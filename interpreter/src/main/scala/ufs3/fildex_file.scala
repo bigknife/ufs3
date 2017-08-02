@@ -81,7 +81,12 @@ final class RandomFildexFile(private val layout: FildexFileLayout,
   def query(limit: Int, order: Fildex.Order): Vector[Idx] = {
     // todo return all idx now, should be fixed in next version
     // should use a query-friendly data structer to store the index
-    uuidMap.toVector.map(_._2)
+    // problem: 仅记住了uuid最后一个的位置
+    keyUuidMap.toVector.map {
+      case (key, uuid) ⇒
+        val idx = uuidMap(uuid)
+        Idx(key, uuid, idx.startPoint, idx.endPoint)
+    }
   }
 }
 
