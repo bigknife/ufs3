@@ -24,6 +24,15 @@ import core.data.Data._
 import scala.language.higherKinds
 
 trait WriteProgam {
+  def isWritable[F[_]](out: UFS3)(implicit F: Filler[F]): Kleisli[Id, CoreConfig, SOP[F, Either[String, Unit]]] = Kleisli {config ⇒
+    val prog: Id[SOP[F, Either[String, Unit]]] = for {
+      writing ← F.isWriting(out.fillerFile.get()): SOP[F, Boolean]
+    } yield {
+      if (writing) Left("ufs3 is writing, please retry later")
+      else Right(())
+    }
+    prog
+  }
   // write a in: IN to UFS3
   // 1. filler file allocate a start point for new sandwich (key → sandwich), got a start point
   // 1. write sandwich head

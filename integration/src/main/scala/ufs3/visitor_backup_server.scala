@@ -23,6 +23,7 @@ import ufs3.core.data.Data._
 import ufs3.integration.command.backupserver.BackupActor.{BackupNewFile, BackupWriteData, ReadCompleted, WriteCompleted}
 import ufs3.integration.command.backupserver.PutActor.RunWithUFS3
 
+import scala.annotation.tailrec
 import scala.util.{Failure, Success}
 
 object BackupLogger {
@@ -34,16 +35,27 @@ class PutActor(coreConfig: CoreConfig) extends Actor {
   def receive: Receive = {
     case RunWithUFS3(key, in, ufs3) ⇒
       val _sender = sender()
-      PutCommand._runWithUfs3(coreConfig, key, in, ufs3) match {
-        case Success(str) ⇒
-          logger.debug(s"put command successfully $str")
-          _sender ! WriteCompleted(key, None)
+      // 首先需要检查是否是正在写入，如果是，则要自旋等待写入完成
+      @tailrec
+      def write(): Unit = {
+        PutCommand._ufs3IsWriting(coreConfig, ufs3) match {
+          case Left(error) ⇒
+            logger.warn(s"$error, wating 1.sec and retry to write $key")
+            Thread.sleep(1000)
+            write()
+          case Right(_) =>
+            PutCommand._runWithUfs3(coreConfig, key, in, ufs3) match {
+              case Success(str) ⇒
+                logger.debug(s"put command successfully $str")
+                _sender ! WriteCompleted(key, None)
 
-        case Failure(t) ⇒
-          //logger.error("put command failed", t)
-          _sender ! WriteCompleted(key, Some(t))
+              case Failure(t) ⇒
+                //logger.error("put command failed", t)
+                _sender ! WriteCompleted(key, Some(t))
+            }
+        }
       }
-      //in.close()
+      write()
       context stop self
   }
 }

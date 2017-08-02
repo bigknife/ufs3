@@ -97,16 +97,27 @@ trait ServeCommand extends SimplePharaohApp {
         fileUpload("file") {
           case (fileInfo, byteSource) ⇒
             complete {
-              // todo use another blocking ec
-              implicit val ec = system.dispatcher
-              import scala.concurrent.duration._
-              implicit val timeout      = Timeout(30.minutes)
-              val f = actor ? UploadProxyActor.Events.UploadRequest(key, byteSource)
-              // f will be Option[Throwable]
-              f.map {
-                case Some(t: Throwable) ⇒ HttpResponse(status = StatusCodes.InternalServerError, entity = t.getMessage)
-                case _ ⇒ HttpResponse(status = StatusCodes.OK, entity = s"$key is put")
+              def putFile(): Future[HttpResponse] = {
+                import scala.concurrent.duration._
+                implicit val timeout = Timeout(30.minutes)
+                val f                = actor ? UploadProxyActor.Events.UploadRequest(key, byteSource)
+                // f will be Option[Throwable]
+                import scala.concurrent.ExecutionContext.Implicits.global
+                f.map {
+                  case Some(t: Throwable) ⇒
+                    HttpResponse(status = StatusCodes.InternalServerError, entity = t.getMessage)
+                  case _ ⇒ HttpResponse(status = StatusCodes.OK, entity = s"$key is put")
+                }
               }
+                val ufs3 = PutCommand.writableUfs3(config)
+                PutCommand._ufs3IsWriting(config, ufs3) match {
+                  case Left(error) ⇒ Future.successful[HttpResponse](
+                    HttpResponse(status = StatusCodes.TooManyRequests, entity = error)
+                  )
+                  case Right(_) ⇒ putFile()
+                }
+
+
             }
         }
       }
