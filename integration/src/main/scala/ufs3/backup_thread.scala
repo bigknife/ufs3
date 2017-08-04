@@ -14,6 +14,7 @@ import java.net.InetSocketAddress
 import java.security.MessageDigest
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.ReentrantLock
 
 import akka.actor.ActorSystem
 import akka.util.ByteString
@@ -33,8 +34,12 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-trait BackupSingleThread {
+object BackupThreadLogger {
   val logger: Logger = Logger.getLogger("backup-thread")
+}
+
+trait BackupSingleThread {
+  import BackupThreadLogger._
 
   def config(): Config = ConfigFactory.parseResources("META-INF/application.conf").withFallback(ConfigFactory.load())
   implicit val system: ActorSystem = {
@@ -60,99 +65,102 @@ trait BackupSingleThread {
   // max is Integer.MAX
   private val queue = new LinkedBlockingQueue[BackupEvent]()
 
-  lazy val thread = new Thread(new Runnable {
-    def run(): Unit = {
-      handleQueue(queue)
-    }
-    @tailrec
-    private def handleQueue(queue: LinkedBlockingQueue[BackupEvent]): Unit = {
-      val event = queue.take()
-      try {
-        workFor(event)
-      } catch {
-        case t: Throwable ⇒ logger.error(s"work for $event failed", t)
-      }
+  val lock = new Object
 
-      handleQueue(queue)
-    }
-    private def workFor(event: BackupEvent): Unit = {
-      logger.debug(s"Got backup event: $event")
-      //todo backup
-      val _connector = tcpConnector.get()
-      val _connection = tcpConnection.get()
-      if (_connector.isDefined) {
-        val md5 = MessageDigest.getInstance("md5")
-        GetCommand._idxOfKey(coreConfig, event.key).map {
-          case Some(idx) ⇒
-            // 1. Magic: "SAND"
-            // 2. BODY_LENGTH, 8 (3#32 + 4#bodylength)
-            // 3. KEY, 32
-            // 4. body stream
-            val bodyLength = 32 + idx.endPoint - idx.startPoint - SandwichHeadLayout.HEAD_LENGTH - SandwichTailLayout.TAIL_LENGTH // 32 key + bodyLength is total body length，还要减去Sandwich头和尾部的字节
-            // head is [0, 8) length, [8, 40) key
-            writeUntilSuccess(_connector.get, _connection, BackupCommand.headBytes(magic = "SAND", event.key, bodyLength))
-            /*
+  lazy val thread = {
+    val t = new Thread(new Runnable {
+      def run(): Unit = {
+        handleQueue(queue)
+      }
+      @tailrec
+      private def handleQueue(queue: LinkedBlockingQueue[BackupEvent]): Unit = {
+        logger.info("handling backup thread queue")
+        val event = queue.take()
+        logger.info("got event from backup thread queu")
+        try {
+          workFor(event)
+        } catch {
+          case t: Throwable ⇒ logger.error(s"work for $event failed", t)
+        } finally {
+          logger.info(s"handled event $event, lock backup thread")
+          lock.synchronized { lock.wait() }
+        }
+
+        handleQueue(queue)
+      }
+      private def workFor(event: BackupEvent): Unit = {
+        logger.debug(s"Got backup event: $event")
+        //todo backup
+        val _connector  = tcpConnector.get()
+        val _connection = tcpConnection.get()
+        if (_connector.isDefined) {
+          val md5 = MessageDigest.getInstance("md5")
+          GetCommand._idxOfKey(coreConfig, event.key).map {
+            case Some(idx) ⇒
+              // 1. Magic: "SAND"
+              // 2. BODY_LENGTH, 8 (3#32 + 4#bodylength)
+              // 3. KEY, 32
+              // 4. body stream
+              val bodyLength = 32 + idx.endPoint - idx.startPoint - SandwichHeadLayout.HEAD_LENGTH - SandwichTailLayout.TAIL_LENGTH // 32 key + bodyLength is total body length，还要减去Sandwich头和尾部的字节
+              // head is [0, 8) length, [8, 40) key
+              writeUntilSuccess(_connector.get,
+                                _connection,
+                                BackupCommand.headBytes(magic = "SAND", event.key, bodyLength))
+              /*
           _connector.get.write(BackupCommand.headBytes(magic = "SAND", event.key, bodyLength), Some(_connection.get)) onComplete {
             case Success(x) ⇒ logger.debug(s"write to ${_connection.get}, success? $x")
             case Failure(t) ⇒ logger.error(s"write to ${_connection.get} failed", t)
           }
-          */
-            logger.debug("writed backup head")
-            md5.reset()
-            val out = new OutputStream {
-              val buffer: ListBuffer[Byte] = ListBuffer.empty
-              val bufSize: Int             = 1 * 1024 * 1024 * 4
-              def write(b: Int): Unit = {
-                if (buffer.size == bufSize) {
-                  val bytes = buffer.toArray
-                  md5.update(bytes)
-                  writeUntilSuccess(_connector.get, _connection, ByteString(bytes))
-                  /*
-                  _connector.get.write(ByteString(bytes), Some(_connection.get)) onComplete {
-                    case Success(x) ⇒ logger.debug(s"write to ${_connection.get}, success? $x")
-                    case Failure(t) ⇒ logger.error(s"write to ${_connection.get} failed", t)
+               */
+              logger.debug("writed backup head")
+              md5.reset()
+              val out = new OutputStream {
+                val buffer: ListBuffer[Byte] = ListBuffer.empty
+                val bufSize: Int             = 1 * 1024 * 1024 * 4
+                def write(b: Int): Unit = {
+                  if (buffer.size == bufSize) {
+                    val bytes = buffer.toArray
+                    md5.update(bytes)
+                    writeUntilSuccess(_connector.get, _connection, ByteString(bytes))
+                    logger.debug(s"writed $bufSize Bytes")
+                    buffer.clear()
                   }
-                  */
-                  logger.debug(s"writed $bufSize Bytes")
-                  buffer.clear()
+                  buffer.append(b.toByte)
+                  ()
                 }
-                buffer.append(b.toByte)
-                ()
-              }
 
-              override def close(): Unit = {
-                if (buffer.nonEmpty) {
-                  val bytes = buffer.toArray
-                  md5.update(bytes)
-                  writeUntilSuccess(_connector.get, _connection, ByteString(bytes))
-                  /*
-                  _connector.get.write(ByteString(bytes), Some(_connection.get)) onComplete {
-                    case Success(x) ⇒ logger.debug(s"write to ${_connection.get}, success? $x")
-                    case Failure(t) ⇒ logger.error(s"write to ${_connection.get} failed", t)
+                override def close(): Unit = {
+                  if (buffer.nonEmpty) {
+                    val bytes = buffer.toArray
+                    md5.update(bytes)
+                    writeUntilSuccess(_connector.get, _connection, ByteString(bytes))
+                    logger.debug(
+                      s"closing, rest buffered writed ${buffer.size} Bytes, md5 is ${md5.digest().map("%02x" format _).mkString("")}")
+                    buffer.clear()
                   }
-                  */
-                  logger.debug(
-                    s"closing, rest buffered writed ${buffer.size} Bytes, md5 is ${md5.digest().map("%02x" format _).mkString("")}")
-                  buffer.clear()
+                  super.close()
                 }
-                super.close()
               }
-            }
-            GetCommand._runWithKey(coreConfig, event.key, out) match {
-              case Success(_) ⇒ logger.info(s"backup successfylly for ${event.key}")
-              case Failure(t) ⇒ logger.error(s"backup failed for ${event.key}", t)
-            }
-            out.close()
-          case None ⇒ Future.failed(new Exception(s"${event.key} not found in ufs3"))
+              GetCommand._runWithKey(coreConfig, event.key, out) match {
+                case Success(_) ⇒ logger.info(s"backup successfully for ${event.key}")
+                case Failure(t) ⇒ logger.error(s"backup failed for ${event.key}", t)
+              }
+              out.close()
+            case None ⇒ Future.failed(new Exception(s"${event.key} not found in ufs3"))
+          }
+          ()
         }
-        ()
-      }
 
-    }
-  })
+      }
+    })
+    t.setName("backup-thread")
+    t
+  }
 
   //todo 需要优化
-  private def writeUntilSuccess(connector: TcpConnector[Connection], connection: Option[Connection], bs: ByteString): Unit = {
+  private def writeUntilSuccess(connector: TcpConnector[Connection],
+                                connection: Option[Connection],
+                                bs: ByteString): Unit = {
     val f = connector.write(bs, connection)
     try {
       val res = Await.result(f, Duration.Inf)
@@ -212,6 +220,23 @@ trait BackupSingleThread {
         tcpConnector.set(Some(connector))
       }
     })
+    val returnVisitor = new AbstractConnectionVisitor() {
+      override def onRead(connector: TcpConnector[Connection], connection: Connection, data: ByteString): ByteString = {
+        if (data.size == 1) {
+          val code = data.mkString("")
+          //promise.success(code == "1")
+          // backup server 回复备份成功，才进行下一个备份
+          if (code == "1") {
+            lock.synchronized {
+              logger.info(s"Backup server has given successful back message, notify go on next backup event")
+              lock.notifyAll()
+            }
+          }
+          ByteString.empty
+        } else data
+      }
+    }
+    c.registerConnectionVisitor(returnVisitor)
     s
   }
 }

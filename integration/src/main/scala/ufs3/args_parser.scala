@@ -65,7 +65,7 @@ package object parser {
   }
 
   val progName: String = "ufs3"
-  val ver: String      = "0.1"
+  val ver: String      = "0.1.20170804_0001"
   val validSize: String ⇒ Either[String, Unit] = x ⇒ {
     //x should end with 'G/M/K/B'
     val end   = x.endsWith("G") || x.endsWith("M") || x.endsWith("K")

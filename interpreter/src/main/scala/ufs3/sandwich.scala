@@ -11,6 +11,7 @@ package sandwich
 
 import java.io.{InputStream, OutputStream}
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicReference
 
 import cats.data.Kleisli
 import cats.effect.IO
@@ -118,9 +119,18 @@ trait SandwichInInterpreter extends SandwichIn.Handler[Kleisli[IO, SandwichInInt
       }
     }
 
+  //WARN 避免每次进行分配
+  //     线程不安全，在当前场景，buffer共享变量是单线程使用的， 可以共享
+  val buffer = new AtomicReference[Option[Array[Byte]]](None)
   def nextBody(in: InputStream): Kleisli[IO, SandwichInInterpreter.Config, Option[ByteBuffer]] = Kleisli { config ⇒
     IO {
-      val buff   = new Array[Byte](config.inputBufferSize)
+      val buff =
+        if (buffer.get.isDefined) buffer.get.get
+        else {
+          val b = new Array[Byte](config.inputBufferSize)
+          buffer.set(Some(b))
+          b
+        }
       val readed = in.read(buff)
       if (readed != -1) {
         Some(ByteBuffer.wrap(buff, 0, readed))

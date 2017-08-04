@@ -50,13 +50,12 @@ class PutActor(coreConfig: CoreConfig) extends Actor {
                 _sender ! WriteCompleted(key, None)
 
               case Failure(t) ⇒
-                //logger.error("put command failed", t)
+                logger.error("put command failed", t)
                 _sender ! WriteCompleted(key, Some(t))
             }
         }
       }
       write()
-      context stop self
   }
 }
 
@@ -99,14 +98,17 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
     logger.info(s"md5 for key=$key is ${md5.digest().map("%02x" format _).mkString("")}")
     md5Map.set(md5Map.get() - key)
   }
+  private lazy val putActor: ActorRef = {
+    context.actorOf(PutActor.props(coreConfig))
+  }
+
 
   def receive: Receive = {
     case BackupNewFile(key, totalLength, connector, connection) ⇒
       logger.debug(s"backup new file：$key, total: $totalLength")
       init(key, connector, connection)
       val (in, _)  = ioMap.get()(key)
-      val actorRef = context.actorOf(PutActor.props(coreConfig))
-      actorRef ! RunWithUFS3(key, in, ufs3.get())
+      putActor ! RunWithUFS3(key, in, ufs3.get())
 
     case BackupWriteData(key, data) ⇒
       logger.debug(s"Got BackupWriteData message for key=$key")
