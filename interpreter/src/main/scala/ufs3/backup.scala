@@ -25,20 +25,21 @@ import com.barcsys.tcp.connection.{Connection, TcpConnector}
 import com.barcsys.tcp.connection.buffer.{BufferSettings, IOBufferSettings}
 import com.barcsys.tcp.connection.connector.ClientConnector
 import com.barcsys.tcp.connection.visitor.{AutoReconnectVisitor, ConnectionWatcher, PangVisitor}
+import sop.Resp
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.concurrent.duration.Duration
 
 trait BackupInterpreter extends Handler[Kleisli[IO, Config, ?]] {
-
+  /*
   private[this] val connector  = new AtomicReference[TcpConnector[Connection]]()
   private[this] val connection = new AtomicReference[Connection]()
   private[this] val client     = new AtomicReference[ClientConnector]()
 
   def open(): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
     import config.actorSystem, config.idle, config.bufSettings, config.ec
-    IO.fromFuture[Unit](Eval.later {
+    IO.fromFuture[Resp[Unit]](Eval.later {
       val _client =
         TcpConnector.createClient(
           targets = Vector(new InetSocketAddress(config.backupHost, config.backupPort)),
@@ -52,7 +53,7 @@ trait BackupInterpreter extends Handler[Kleisli[IO, Config, ?]] {
           )
         )
       client.set(_client)
-      val f: Future[Unit] = _client
+      val f: Future[Resp[Unit]] = _client
         .startup()
         .map(x ⇒ {
           connector.set(x._1)
@@ -85,9 +86,11 @@ trait BackupInterpreter extends Handler[Kleisli[IO, Config, ?]] {
         Future.failed[Unit](new IOException(s"connector to ${config.backupHost}:${config.backupPort} not opened now"))
     })
   }
+  */
 }
 
 object BackupInterpreter {
+
   trait Config {
     def backupHost: String
     def backupPort: Int
@@ -103,6 +106,7 @@ object BackupInterpreter {
     def backupHost: String = _backupHost
     def backupPort: Int    = _backupPort
   }
-
-  def apply(): BackupInterpreter = new BackupInterpreter() {}
+  /*
+    def apply(): BackupInterpreter = new BackupInterpreter() {}
+    */
 }
