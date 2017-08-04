@@ -15,18 +15,24 @@ import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicReference
 
 import akka.actor.{Actor, ActorContext, ActorRef, ActorSystem, Props}
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.scaladsl.Source
 import akka.util.{ByteString, Timeout}
 import akka.pattern._
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.StreamConverters
+import org.apache.log4j.Logger
 import ufs3.core.data
-import ufs3.core.data.Data
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 import ufs3.core.data.Data._
+
+import scala.annotation.tailrec
+import UploadLogger.logger
+
+object UploadLogger {
+  val logger: Logger = Logger.getLogger("upload")
+}
 
 trait UploadProxyActor extends Actor {
 
@@ -88,7 +94,6 @@ trait PipeLineStreamActor extends Actor {
     case Events.PipeLineStream(in, out, source) ⇒
       out.connect(in)
       val sink = StreamConverters.fromOutputStream(() ⇒ out)
-      //todo use another blocking ec
       import context.dispatcher
       val _sender = sender()
       source
@@ -150,13 +155,24 @@ trait PutActor extends Actor {
   def receive: Receive = {
     case Events.Put(key, ins) ⇒
       val _sender = sender()
-
-      PutCommand._runWithUfs3(coreConfig, key, ins, ufs3) match {
-        case Success(_) ⇒ // println("put ok")
-          _sender ! None
-        case Failure(x) ⇒ //x.printStackTrace()
-          _sender ! Some(x)
+      // 首先需要检查是否是正在写入，如果是，则要自旋等待写入完成
+      @tailrec
+      def write(): Unit = {
+        PutCommand._ufs3IsWriting(coreConfig, ufs3) match {
+          case Left(error) ⇒
+            logger.warn(s"$error, wating 1.sec and retry to write $key")
+            Thread.sleep(1000)
+            write()
+          case Right(_) =>
+            PutCommand._runWithUfs3(coreConfig, key, ins, ufs3) match {
+              case Success(_) ⇒ // println("put ok")
+                _sender ! None
+              case Failure(x) ⇒ //x.printStackTrace()
+                _sender ! Some(x)
+            }
+        }
       }
+      write()
 
       // start backup
       // use a fixed thread pool

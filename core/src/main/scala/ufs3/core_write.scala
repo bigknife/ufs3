@@ -24,6 +24,30 @@ import core.data.Data._
 import scala.language.higherKinds
 
 trait WriteProgam {
+  def isWritable[F[_]](out: UFS3)(implicit F: Filler[F]): Kleisli[Id, CoreConfig, SOP[F, Either[String, Unit]]] =
+    Kleisli { config ⇒
+      val prog: Id[SOP[F, Either[String, Unit]]] = for {
+        writing ← F.isWriting(out.fillerFile.get()): SOP[F, Boolean]
+      } yield {
+        if (writing) Left("ufs3 is writing, please retry later")
+        else Right(())
+      }
+      prog
+    }
+
+  def existedKey[F[_]](key: String, out: UFS3)(implicit FI: Fildex[F]): Kleisli[Id, CoreConfig, SOP[F, Boolean]] =
+    Kleisli { config ⇒
+      val prog: Id[SOP[F, Boolean]] = for {
+        optIdx ← FI.fetchKey(key, out.fildexFile.get()): SOP[F, Option[Idx]]
+      } yield optIdx.isDefined
+      prog
+    }
+
+  def forceToWrite[F[_]](out: UFS3)(implicit F: Filler[F]): Kleisli[Id, CoreConfig, SOP[F, Unit]] = Kleisli { config ⇒
+    val prog: Id[SOP[F, Unit]] = F.forceToWrite(out.fillerFile.get())
+    prog
+  }
+
   // write a in: IN to UFS3
   // 1. filler file allocate a start point for new sandwich (key → sandwich), got a start point
   // 1. write sandwich head
@@ -36,69 +60,69 @@ trait WriteProgam {
                                                       L: Log[F],
                                                       FI: Fildex[F],
                                                       S: SandwichIn[F, IN]): Kleisli[Id, CoreConfig, SOP[F, String]] =
-  Kleisli { coreConfig ⇒
-    import L._
-    def prog(md: MessageDigest): Id[SOP[F, String]] =
-      for {
-        writing ← F.isWriting(out.fillerFile.get())
-        optIdx ← if (writing) {
-          for {
-            _ ← warn(s"ufs3 is writing, please retry later! requesting key = $key")
-          } yield throw new IllegalAccessException("ufs3 is writing, please retry later")
-          //throw new IllegalAccessException("ufs3 is writing, please retry later")
-        } else FI.fetchKey(key, out.fildexFile.get())
-        _ ← info(s"writing for key: $key")
-        startPos ← if (optIdx.isEmpty) F.startAppend(out.fillerFile.get())
-        else {
-          for {
-            _ ← error(s"stop writing, $key has existed in ufs3")
-          } yield throw new IllegalArgumentException(s"$key has existed in ufs3")
-
-        }
-
-        headB ← S.head(key, EmptyUUID, 0) //length can't be detected
-        bodyLength ← {
-          def writeBody(md5: MessageDigest, pos: Long): SOP[F, Long] =
+    Kleisli { coreConfig ⇒
+      import L._
+      def prog(md: MessageDigest): Id[SOP[F, String]] =
+        for {
+          writing ← F.isWriting(out.fillerFile.get())
+          optIdx ← if (writing) {
             for {
-              obb ← S.nextBody(in)
-              nextLength ← if (obb.nonEmpty) {
-                md5.update(obb.get)
-                for {
-                  _ ← B.seek(out.blockFile.get(), pos)
-                  _ ← B.write(out.blockFile.get(), obb.get)
-                  a ← writeBody(md5, pos + obb.get.limit())
-                  _ ← debug(s"writing $key, from $pos, length: ${obb.get.limit()}")
-                } yield a
-              } else
-                Par.pure[F, Long](0): SOP[F, Long] // implicitly transformed by liftPAR_to_SOP
-            //_ ← if (obb.nonEmpty) BAK.send(obb.get) else Par.pure[F, Unit](()) // backup body
-            } yield nextLength + obb.map(_.limit()).getOrElse(0)
-          // 从 startpos + headB 的地方写入
-          writeBody(md, startPos + headB.limit())
+              _ ← warn(s"ufs3 is writing, please retry later! requesting key = $key")
+            } yield throw new IllegalAccessException("ufs3 is writing, please retry later")
+            //throw new IllegalAccessException("ufs3 is writing, please retry later")
+          } else FI.fetchKey(key, out.fildexFile.get())
+          _ ← info(s"writing for key: $key")
+          startPos ← if (optIdx.isEmpty) F.startAppend(out.fillerFile.get())
+          else {
+            for {
+              _ ← error(s"stop writing, $key has existed in ufs3")
+            } yield throw new IllegalArgumentException(s"$key has existed in ufs3")
+
+          }
+
+          headB ← S.head(key, EmptyUUID, 0) //length can't be detected
+          bodyLength ← {
+            def writeBody(md5: MessageDigest, pos: Long): SOP[F, Long] =
+              for {
+                obb ← S.nextBody(in)
+                nextLength ← if (obb.nonEmpty) {
+                  md5.update(obb.get)
+                  for {
+                    _ ← B.seek(out.blockFile.get(), pos)
+                    _ ← B.write(out.blockFile.get(), obb.get)
+                    a ← writeBody(md5, pos + obb.get.limit())
+                    _ ← debug(s"writing $key, from $pos, length: ${obb.get.limit()}")
+                  } yield a
+                } else
+                  Par.pure[F, Long](0): SOP[F, Long] // implicitly transformed by liftPAR_to_SOP
+                //_ ← if (obb.nonEmpty) BAK.send(obb.get) else Par.pure[F, Unit](()) // backup body
+              } yield nextLength + obb.map(_.limit()).getOrElse(0)
+            // 从 startpos + headB 的地方写入
+            writeBody(md, startPos + headB.limit())
+          }
+          md5   ← SOP.pure[F, String](md.digest().map("%02x".format(_)).mkString(""))
+          headB ← S.head(key, md5, bodyLength)
+          _     ← B.seek(out.blockFile.get(), startPos)
+          _     ← B.write(out.blockFile.get(), headB)
+          _     ← debug(s"writed $bodyLength bytes with key = $key, md5 = $md5")
+          tailB ← S.tail(md5.getBytes("iso8859_1"), bodyLength)
+          _     ← B.seek(out.blockFile.get(), startPos + headB.limit() + bodyLength)
+          _     ← B.write(out.blockFile.get(), tailB)
+          newFildexFile ← FI.append(out.fildexFile.get(),
+                                    Idx(key, md5, startPos, startPos + headB.limit() + bodyLength + tailB.limit()))
+          newFillerFile ← F.endAppend(out.fillerFile.get(),
+                                      startPos,
+                                      startPos + headB.limit() + bodyLength + tailB.limit())
+          _ ← info(
+            s"writed filler and fildex with key: $key. startPos: $startPos, endPos: ${startPos + headB.limit() + bodyLength + tailB
+              .limit()}")
+        } yield {
+          out.fillerFile.set(newFillerFile)
+          out.fildexFile.set(newFildexFile)
+          md5
         }
-        md5   ← SOP.pure[F, String](md.digest().map("%02x".format(_)).mkString(""))
-        headB ← S.head(key, md5, bodyLength)
-        _     ← B.seek(out.blockFile.get(), startPos)
-        _     ← B.write(out.blockFile.get(), headB)
-        _     ← debug(s"writed $bodyLength bytes with key = $key, md5 = $md5")
-        tailB ← S.tail(md5.getBytes("iso8859_1"), bodyLength)
-        _     ← B.seek(out.blockFile.get(), startPos + headB.limit() + bodyLength)
-        _     ← B.write(out.blockFile.get(), tailB)
-        newFildexFile ← FI.append(out.fildexFile.get(),
-          Idx(key, md5, startPos, startPos + headB.limit() + bodyLength + tailB.limit()))
-        newFillerFile ← F.endAppend(out.fillerFile.get(),
-          startPos,
-          startPos + headB.limit() + bodyLength + tailB.limit())
-        _ ← info(
-          s"writed filler and fildex with key: $key. startPos: $startPos, endPos: ${startPos + headB.limit() + bodyLength + tailB
-            .limit()}")
-      } yield {
-        out.fillerFile.set(newFillerFile)
-        out.fildexFile.set(newFildexFile)
-        md5
-      }
-    prog(MessageDigest.getInstance("md5"))
-  }
+      prog(MessageDigest.getInstance("md5"))
+    }
 
 }
 

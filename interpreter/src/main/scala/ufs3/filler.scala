@@ -98,6 +98,12 @@ trait FillerInterpreter extends Filler.Handler[Kleisli[IO, FillerInterpreter.Con
       FillerInterpreter.atomWriting.get() != 0
     }
   }
+
+  def forceToWrite(ff: FillerFile): Kleisli[IO, FillerInterpreter.Config, Unit] = Kleisli {config ⇒
+    IO {
+      FillerInterpreter.atomWriting.set(0)
+    }
+  }
 }
 
 object FillerInterpreter {
