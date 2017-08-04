@@ -24,45 +24,45 @@ import sop._
 trait Block[F[_]] {
   import Block._
 
-  def existed(path: Path): Par[F, Boolean]
-  def open(path: Path, mode: FileMode): Par[F, BlockFile]
-  def close(bf: BlockFile): Par[F, Unit]
-  def create(path: Path, size: Size): Par[F, BlockFile]
-  def delete(path: Path): Par[F, Unit]
-  def seek(bf: BlockFile, pos: Long): Par[F, Unit]
-  def read(bf: BlockFile, size: Size): Par[F, ByteBuffer]
-  def write(bf: BlockFile, data: ByteBuffer): Par[F, Unit]
-  def lock(bf: BlockFile): Par[F, Boolean]
-  def unlock(bf: BlockFile): Par[F, Unit]
+  def existed(path: Path): RespPar[F, Boolean]
+  def open(path: Path, mode: FileMode): RespPar[F, BlockFile]
+  def close(bf: BlockFile): RespPar[F, Unit]
+  def create(path: Path, size: Size): RespPar[F, BlockFile]
+  def delete(path: Path): RespPar[F, Unit]
+  def seek(bf: BlockFile, pos: Long): RespPar[F, Unit]
+  def read(bf: BlockFile, size: Size): RespPar[F, ByteBuffer]
+  def write(bf: BlockFile, data: ByteBuffer): RespPar[F, Unit]
+  def lock(bf: BlockFile): RespPar[F, Boolean]
+  def unlock(bf: BlockFile): RespPar[F, Unit]
 
 }
 object Block {
   sealed trait Op[A]
 
   // Block Command
-  final case class Existed(path: Path)                    extends Op[Boolean]
-  final case class Open(path: Path, mode: FileMode)       extends Op[BlockFile]
-  final case class Close(bf: BlockFile)                   extends Op[Unit]
-  final case class Create(path: Path, size: Size)         extends Op[BlockFile]
-  final case class Delete(path: Path)                     extends Op[Unit]
-  final case class Seek(bf: BlockFile, pos: Long)         extends Op[Unit]
-  final case class Read(bf: BlockFile, size: Size)        extends Op[ByteBuffer]
-  final case class Write(bf: BlockFile, data: ByteBuffer) extends Op[Unit]
-  final case class Lock(bf: BlockFile)                    extends Op[Boolean]
-  final case class Unlock(bf: BlockFile)                  extends Op[Unit]
+  final case class Existed(path: Path)                    extends Op[Resp[Boolean]]
+  final case class Open(path: Path, mode: FileMode)       extends Op[Resp[BlockFile]]
+  final case class Close(bf: BlockFile)                   extends Op[Resp[Unit]]
+  final case class Create(path: Path, size: Size)         extends Op[Resp[BlockFile]]
+  final case class Delete(path: Path)                     extends Op[Resp[Unit]]
+  final case class Seek(bf: BlockFile, pos: Long)         extends Op[Resp[Unit]]
+  final case class Read(bf: BlockFile, size: Size)        extends Op[Resp[ByteBuffer]]
+  final case class Write(bf: BlockFile, data: ByteBuffer) extends Op[Resp[Unit]]
+  final case class Lock(bf: BlockFile)                    extends Op[Resp[Boolean]]
+  final case class Unlock(bf: BlockFile)                  extends Op[Resp[Unit]]
 
   final class To[F[_]](implicit I: Inject[Op, F]) extends Block[F] {
 
-    def existed(path: Path): Par[F, Boolean]                 = liftPar_T[Op, F, Boolean](Existed(path))
-    def open(path: Path, mode: FileMode): Par[F, BlockFile]  = liftPar_T[Op, F, BlockFile](Open(path, mode))
-    def close(bf: BlockFile): Par[F, Unit]                   = liftPar_T[Op, F, Unit](Close(bf))
-    def create(path: Path, size: Size): Par[F, BlockFile]    = liftPar_T[Op, F, BlockFile](Create(path, size))
-    def delete(path: Path): Par[F, Unit]                     = liftPar_T[Op, F, Unit](Delete(path))
-    def seek(bf: BlockFile, pos: Long): Par[F, Unit]         = liftPar_T[Op, F, Unit](Seek(bf, pos))
-    def read(bf: BlockFile, size: Size): Par[F, ByteBuffer]  = liftPar_T[Op, F, ByteBuffer](Read(bf, size))
-    def write(bf: BlockFile, data: ByteBuffer): Par[F, Unit] = liftPar_T[Op, F, Unit](Write(bf, data))
-    def lock(bf: BlockFile): Par[F, Boolean]                 = liftPar_T[Op, F, Boolean](Lock(bf))
-    def unlock(bf: BlockFile): Par[F, Unit]                  = liftPar_T[Op, F, Unit](Unlock(bf))
+    def existed(path: Path): RespPar[F, Boolean]                 = liftPar_T[Op, F, Resp[Boolean]](Existed(path))
+    def open(path: Path, mode: FileMode): RespPar[F, BlockFile]  = liftPar_T[Op, F, Resp[BlockFile]](Open(path, mode))
+    def close(bf: BlockFile): RespPar[F, Unit]                   = liftPar_T[Op, F, Resp[Unit]](Close(bf))
+    def create(path: Path, size: Size): RespPar[F, BlockFile]    = liftPar_T[Op, F, Resp[BlockFile]](Create(path, size))
+    def delete(path: Path): RespPar[F, Unit]                     = liftPar_T[Op, F, Resp[Unit]](Delete(path))
+    def seek(bf: BlockFile, pos: Long): RespPar[F, Unit]         = liftPar_T[Op, F, Resp[Unit]](Seek(bf, pos))
+    def read(bf: BlockFile, size: Size): RespPar[F, ByteBuffer]  = liftPar_T[Op, F, Resp[ByteBuffer]](Read(bf, size))
+    def write(bf: BlockFile, data: ByteBuffer): RespPar[F, Unit] = liftPar_T[Op, F, Resp[Unit]](Write(bf, data))
+    def lock(bf: BlockFile): RespPar[F, Boolean]                 = liftPar_T[Op, F, Resp[Boolean]](Lock(bf))
+    def unlock(bf: BlockFile): RespPar[F, Unit]                  = liftPar_T[Op, F, Resp[Unit]](Unlock(bf))
   }
 
   implicit def to[F[_]](implicit I: Inject[Op, F]) = new To[F]
@@ -71,16 +71,16 @@ object Block {
 
   trait Handler[M[_]] extends NT[Op, M] {
 
-    protected[this] def existed(path: Path): M[Boolean]
-    protected[this] def open(path: Path, mode: FileMode): M[BlockFile]
-    protected[this] def close(bf: BlockFile): M[Unit]
-    protected[this] def create(path: Path, size: Size): M[BlockFile]
-    protected[this] def delete(path: Path): M[Unit]
-    protected[this] def seek(blockFile: BlockFile, pos: Long): M[Unit]
-    protected[this] def read(blockFile: BlockFile, size: Size): M[ByteBuffer]
-    protected[this] def write(blockFile: BlockFile, data: ByteBuffer): M[Unit]
-    protected[this] def lock(blockFile: BlockFile): M[Boolean]
-    protected[this] def unlock(blockFile: BlockFile): M[Unit]
+    protected[this] def existed(path: Path): M[Resp[Boolean]]
+    protected[this] def open(path: Path, mode: FileMode): M[Resp[BlockFile]]
+    protected[this] def close(bf: BlockFile): M[Resp[Unit]]
+    protected[this] def create(path: Path, size: Size): M[Resp[BlockFile]]
+    protected[this] def delete(path: Path): M[Resp[Unit]]
+    protected[this] def seek(blockFile: BlockFile, pos: Long): M[Resp[Unit]]
+    protected[this] def read(blockFile: BlockFile, size: Size): M[Resp[ByteBuffer]]
+    protected[this] def write(blockFile: BlockFile, data: ByteBuffer): M[Resp[Unit]]
+    protected[this] def lock(blockFile: BlockFile): M[Resp[Boolean]]
+    protected[this] def unlock(blockFile: BlockFile): M[Resp[Unit]]
 
     override def apply[A](fa: Op[A]): M[A] = fa match {
       case Existed(path)      ⇒ existed(path)

@@ -32,11 +32,12 @@ lazy val kernel = (project in file("kernel"))
     libraryDependencies += "org.scalactic" %% "scalactic"   % "3.0.1",
     libraryDependencies += "org.scalatest" %% "scalatest"   % "3.0.1" % "test"
   )
-
+/*
 lazy val core = (project in file("core"))
   .dependsOn(kernel)
   .settings(commonSettings: _*)
-
+*/
+/*
 lazy val interpreter = (project in file("interpreter"))
   .dependsOn(kernel)
   .settings(commonSettings: _*)
@@ -50,7 +51,8 @@ lazy val interpreter = (project in file("interpreter"))
     libraryDependencies += "org.scalactic"     %% "scalactic"              % "3.0.1",
     libraryDependencies += "org.scalatest"     %% "scalatest"              % "3.0.1" % "test"
   )
-
+*/
+/*
 lazy val integration = (project in file("integration"))
   .dependsOn(core)
   .dependsOn(interpreter)
@@ -62,3 +64,4 @@ lazy val integration = (project in file("integration"))
     mainClass in assembly := Some("ufs3.integration.Main"),
     assemblyJarName := s"ufs3"
   )
+*/

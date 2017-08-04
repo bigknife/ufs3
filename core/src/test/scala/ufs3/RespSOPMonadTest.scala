@@ -12,24 +12,27 @@ package monad
 
 import java.util.concurrent.atomic.AtomicLong
 
-import cats.Id
+import cats.{Id, Monad}
 import cats.free.Inject
 import sop._
-import ufs3.core.monad.SomeAction.UnsafeDo
+import ufs3.core.monad.SomeAction.{GetInt, Print}
 
 import scala.language.higherKinds
-import ufs3.core.data.Data._
+import scala.util.Random
 
 trait SomeAction[F[_]] {
-  def unsafeDo(): Par[F, Either[Throwable, Int]]
+  def getInt: Par[F, Resp[Int]]
+  def print(str: String): Par[F, Resp[Unit]]
 }
 
 object SomeAction {
   sealed trait Op[A]
-  final case class UnsafeDo() extends Op[Either[Throwable, Int]]
+  case object GetInt                  extends Op[Resp[Int]]
+  final case class Print(str: String) extends Op[Resp[Unit]]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends SomeAction[F] {
-    def unsafeDo(): Par[F, Either[Throwable, Int]] = liftPar_T[Op, F, Either[Throwable, Int]](UnsafeDo())
+    def getInt: Par[F, Resp[Int]] = liftPar_T[Op, F, Resp[Int]](GetInt)
+    def print(str: String): Par[F, Resp[Unit]] = liftPar_T[Op, F, Resp[Unit]](Print(str))
   }
   implicit def to[F[_]](implicit I: Inject[Op, F]): SomeAction[F] = new To[F]
 
@@ -38,25 +41,48 @@ object SomeAction {
 
 object Test extends App {
   val action = SomeAction[SomeAction.Op]
+  import action._
 
+  /*
   val prog: RespSOP[SomeAction.Op, Int] = for {
-    res1 ← action.unsafeDo(): RespSOP[SomeAction.Op, Int]
-    res2 ← action.unsafeDo(): RespSOP[SomeAction.Op, Int]
-    res3 ← action.unsafeDo(): RespSOP[SomeAction.Op, Int]
-  } yield res3
+    i ← getInt: Monad[RespSOP[SomeAction.Op, ?]]
+    _ ← (if (i % 2 == 0) print(s"$i 是偶数") else print(s"$i 是奇数")):Monad[RespSOP[SomeAction.Op, Unit]]
+  } yield i
+  */
+  val monad = RespSOPMonad[SomeAction.Op]
+  val g = getInt: RespSOP[SomeAction.Op, Int]
+  def f(str: String): RespSOP[SomeAction.Op, Unit] = print(str)
+  val prog = monad.flatMap(g) { i ⇒
+    print(s"i = $i")
+  }
+
+  val gops = toRespSOPMonad(g)
+  import RespSOP._
+  val prog1 = for {
+    i ← getInt.asM
+    _ ← (if (i % 2 == 0) f(s"$i 是偶数") else f(s"$i 是奇数")).asM
+  } yield i
 
   val interpreter = new NT[SomeAction.Op, Id] {
     val count = new AtomicLong(0)
     def apply[A](fa: SomeAction.Op[A]): Id[A] = fa match {
-      case UnsafeDo() ⇒
-        val c = count.getAndIncrement()
-        if (c % 3 != 0) Right(c.toInt)
-        else Left(new Exception(s"counter is $c"))
+      case GetInt ⇒
+        Right(Random.nextInt())
+      case Print(str) ⇒
+        Right(println(str))
     }
   }
 
+
   prog.foldMap(interpreter) match {
-    case Left(t) ⇒ t.printStackTrace()
+    case Left(t)  ⇒ t.printStackTrace()
     case Right(i) ⇒ println(s"result is $i")
   }
+
+  println("--------------")
+  prog1.foldMap(interpreter) match {
+    case Left(t)  ⇒ t.printStackTrace()
+    case Right(i) ⇒ println(s"result is $i")
+  }
+
 }

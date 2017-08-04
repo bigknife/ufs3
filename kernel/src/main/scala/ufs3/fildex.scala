@@ -25,16 +25,16 @@ import scala.language.{higherKinds, implicitConversions}
 trait Fildex[F[_]] {
   import Fildex._
 
-  def init(bf: BlockFile): Par[F, FildexFile]
-  def check(bf: BlockFile, filler: FillerFile): Par[F, Boolean]
-  def repair(bf: BlockFile, filler: FillerFile): Par[F, FildexFile]
-  def load(bf: BlockFile): Par[F, FildexFile]
-  def append(bf: FildexFile, idx: Idx): Par[F, FildexFile]
-  def close(bf: FildexFile): Par[F, Unit]
-  def fetchKey(key: String, fildex: FildexFile): Par[F, Option[Idx]]
-  def fetchUuid(uuid: String, fildex: FildexFile): Par[F, Option[Idx]]
-  def query(limit: Int, order: Order, fildex: FildexFile): Par[F, Vector[Idx]]
-  def freeSpace(fi: FildexFile): Par[F, Long]
+  def init(bf: BlockFile): RespPar[F, FildexFile]
+  def check(bf: BlockFile, filler: FillerFile): RespPar[F, Boolean]
+  def repair(bf: BlockFile, filler: FillerFile): RespPar[F, FildexFile]
+  def load(bf: BlockFile): RespPar[F, FildexFile]
+  def append(bf: FildexFile, idx: Idx): RespPar[F, FildexFile]
+  def close(bf: FildexFile): RespPar[F, Unit]
+  def fetchKey(key: String, fildex: FildexFile): RespPar[F, Option[Idx]]
+  def fetchUuid(uuid: String, fildex: FildexFile): RespPar[F, Option[Idx]]
+  def query(limit: Int, order: Order, fildex: FildexFile): RespPar[F, Vector[Idx]]
+  def freeSpace(fi: FildexFile): RespPar[F, Long]
 }
 
 object Fildex {
@@ -49,30 +49,32 @@ object Fildex {
   }
 
   sealed trait Op[A]
-  final case class Init(bf: BlockFile)                                 extends Op[FildexFile]
-  final case class Check(bf: BlockFile, filler: FillerFile)            extends Op[Boolean]
-  final case class Repair(bf: BlockFile, filler: FillerFile)           extends Op[FildexFile]
-  final case class Load(bf: BlockFile)                                 extends Op[FildexFile]
-  final case class Close(bf: FildexFile)                               extends Op[Unit]
-  final case class FetchKey(key: String, fildex: FildexFile)              extends Op[Option[Idx]]
-  final case class FetchUuid(uuid: String, fildex: FildexFile)              extends Op[Option[Idx]]
-  final case class Query(limit: Int, order: Order, fildex: FildexFile) extends Op[Vector[Idx]]
-  final case class FreeSpace(fi: FildexFile) extends Op[Long]
-
-  final case class Append(bf: FildexFile, idx: Idx) extends Op[FildexFile]
+  final case class Init(bf: BlockFile)                                 extends Op[Resp[FildexFile]]
+  final case class Check(bf: BlockFile, filler: FillerFile)            extends Op[Resp[Boolean]]
+  final case class Repair(bf: BlockFile, filler: FillerFile)           extends Op[Resp[FildexFile]]
+  final case class Load(bf: BlockFile)                                 extends Op[Resp[FildexFile]]
+  final case class Close(bf: FildexFile)                               extends Op[Resp[Unit]]
+  final case class FetchKey(key: String, fildex: FildexFile)           extends Op[Resp[Option[Idx]]]
+  final case class FetchUuid(uuid: String, fildex: FildexFile)         extends Op[Resp[Option[Idx]]]
+  final case class Query(limit: Int, order: Order, fildex: FildexFile) extends Op[Resp[Vector[Idx]]]
+  final case class FreeSpace(fi: FildexFile)                           extends Op[Resp[Long]]
+  final case class Append(bf: FildexFile, idx: Idx)                    extends Op[Resp[FildexFile]]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Fildex[F] {
-    def check(bf: BlockFile, filler: FillerFile): Par[F, Boolean]     = liftPar_T[Op, F, Boolean](Check(bf, filler))
-    def repair(bf: BlockFile, filler: FillerFile): Par[F, FildexFile] = liftPar_T[Op, F, FildexFile](Repair(bf, filler))
-    def load(bf: BlockFile): Par[F, FildexFile]                       = liftPar_T[Op, F, FildexFile](Load(bf))
-    def init(bf: BlockFile): Par[F, FildexFile]                       = liftPar_T[Op, F, FildexFile](Init(bf))
-    def close(bf: FildexFile): Par[F, Unit]                           = liftPar_T[Op, F, Unit](Close(bf))
-    def fetchKey(key: String, fildex: FildexFile): Par[F, Option[Idx]]   = liftPar_T[Op, F, Option[Idx]](FetchKey(key, fildex))
-    def fetchUuid(uuid: String, fildex: FildexFile): Par[F, Option[Idx]]   = liftPar_T[Op, F, Option[Idx]](FetchUuid(uuid, fildex))
-    def query(limit: Int, order: Order, fildex: FildexFile): Par[F, Vector[Idx]] =
-      liftPar_T[Op, F, Vector[Idx]](Query(limit, order, fildex))
-    def append(bf: FildexFile, idx: Idx): Par[F, FildexFile] = liftPar_T[Op, F, FildexFile](Append(bf, idx))
-    def freeSpace(fi: FildexFile): Par[F, Long] = liftPar_T[Op, F, Long](FreeSpace(fi))
+    def check(bf: BlockFile, filler: FillerFile): RespPar[F, Boolean] = liftPar_T[Op, F, Resp[Boolean]](Check(bf, filler))
+    def repair(bf: BlockFile, filler: FillerFile): RespPar[F, FildexFile] =
+      liftPar_T[Op, F, Resp[FildexFile]](Repair(bf, filler))
+    def load(bf: BlockFile): RespPar[F, FildexFile] = liftPar_T[Op, F, Resp[FildexFile]](Load(bf))
+    def init(bf: BlockFile): RespPar[F, FildexFile] = liftPar_T[Op, F, Resp[FildexFile]](Init(bf))
+    def close(bf: FildexFile): RespPar[F, Unit]     = liftPar_T[Op, F, Resp[Unit]](Close(bf))
+    def fetchKey(key: String, fildex: FildexFile): RespPar[F, Option[Idx]] =
+      liftPar_T[Op, F, Resp[Option[Idx]]](FetchKey(key, fildex))
+    def fetchUuid(uuid: String, fildex: FildexFile): RespPar[F, Option[Idx]] =
+      liftPar_T[Op, F, Resp[Option[Idx]]](FetchUuid(uuid, fildex))
+    def query(limit: Int, order: Order, fildex: FildexFile): RespPar[F, Vector[Idx]] =
+      liftPar_T[Op, F, Resp[Vector[Idx]]](Query(limit, order, fildex))
+    def append(bf: FildexFile, idx: Idx): RespPar[F, FildexFile] = liftPar_T[Op, F, Resp[FildexFile]](Append(bf, idx))
+    def freeSpace(fi: FildexFile): RespPar[F, Long]              = liftPar_T[Op, F, Resp[Long]](FreeSpace(fi))
   }
   implicit def to[F[_]](implicit I: Inject[Op, F]): Fildex[F] = new To[F]
 
@@ -80,16 +82,16 @@ object Fildex {
 
   trait Handler[M[_]] extends NT[Op, M] {
 
-    def check(bf: BlockFile, filler: FillerFile): M[Boolean]
-    def repair(bf: BlockFile, filler: FillerFile): M[FildexFile]
-    def load(bf: BlockFile): M[FildexFile]
-    def init(bf: BlockFile): M[FildexFile]
-    def append(bf: FildexFile, idx: Idx): M[FildexFile]
-    def close(bf: FildexFile): M[Unit]
-    def fetchKey(key: String, fildex: FildexFile): M[Option[Idx]]
-    def fetchUuid(uuid: String, fildex: FildexFile): M[Option[Idx]]
-    def query(limit: Int, order: Order, fildex: FildexFile): M[Vector[Idx]]
-    def freeSpace(fi: FildexFile): M[Long]
+    def check(bf: BlockFile, filler: FillerFile): M[Resp[Boolean]]
+    def repair(bf: BlockFile, filler: FillerFile): M[Resp[FildexFile]]
+    def load(bf: BlockFile): M[Resp[FildexFile]]
+    def init(bf: BlockFile): M[Resp[FildexFile]]
+    def append(bf: FildexFile, idx: Idx): M[Resp[FildexFile]]
+    def close(bf: FildexFile): M[Resp[Unit]]
+    def fetchKey(key: String, fildex: FildexFile): M[Resp[Option[Idx]]]
+    def fetchUuid(uuid: String, fildex: FildexFile): M[Resp[Option[Idx]]]
+    def query(limit: Int, order: Order, fildex: FildexFile): M[Resp[Vector[Idx]]]
+    def freeSpace(fi: FildexFile): M[Resp[Long]]
 
     def apply[A](fa: Op[A]): M[A] = fa match {
       case Check(bf, filler)           ⇒ check(bf, filler)
@@ -98,10 +100,10 @@ object Fildex {
       case Init(bf)                    ⇒ init(bf)
       case Close(bf)                   ⇒ close(bf)
       case Append(bf, idx)             ⇒ append(bf, idx)
-      case FetchKey(key, fildex)          ⇒ fetchKey(key, fildex)
-      case FetchUuid(uuid, fildex)          ⇒ fetchUuid(uuid, fildex)
+      case FetchKey(key, fildex)       ⇒ fetchKey(key, fildex)
+      case FetchUuid(uuid, fildex)     ⇒ fetchUuid(uuid, fildex)
       case Query(limit, order, fildex) ⇒ query(limit, order, fildex)
-      case FreeSpace(fi) ⇒ freeSpace(fi)
+      case FreeSpace(fi)               ⇒ freeSpace(fi)
     }
   }
 
