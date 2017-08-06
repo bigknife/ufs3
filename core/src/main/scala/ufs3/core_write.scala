@@ -22,29 +22,29 @@ import ufs3.kernel.log.Log
 import ufs3.kernel.sandwich.SandwichIn
 import core.data.Data._
 import scala.language.higherKinds
+import RespSOP._
 
 trait WriteProgam {
-  def isWritable[F[_]](out: UFS3)(implicit F: Filler[F]): Kleisli[Id, CoreConfig, SOP[F, Either[String, Unit]]] =
+  def isWritable[F[_]](out: UFS3)(implicit F: Filler[F]): Kleisli[Id, CoreConfig, RespSOP[F, Unit]] =
     Kleisli { config ⇒
-      val prog: Id[SOP[F, Either[String, Unit]]] = for {
-        writing ← F.isWriting(out.fillerFile.get()): SOP[F, Boolean]
-      } yield {
-        if (writing) Left("ufs3 is writing, please retry later")
-        else Right(())
-      }
+      val prog: Id[RespSOP[F, Unit]] = for {
+        writing ← F.isWriting(out.fillerFile.get()).asM
+        _ ← if (writing) RespSOP.error[F, Unit](new IllegalStateException("ufs3 is writing, please retry later")).asM
+        else RespSOP.pure[F, Unit](()).asM
+      } yield ()
       prog
     }
 
-  def existedKey[F[_]](key: String, out: UFS3)(implicit FI: Fildex[F]): Kleisli[Id, CoreConfig, SOP[F, Boolean]] =
+  def existedKey[F[_]](key: String, out: UFS3)(implicit FI: Fildex[F]): Kleisli[Id, CoreConfig, RespSOP[F, Boolean]] =
     Kleisli { config ⇒
-      val prog: Id[SOP[F, Boolean]] = for {
-        optIdx ← FI.fetchKey(key, out.fildexFile.get()): SOP[F, Option[Idx]]
+      val prog: Id[RespSOP[F, Boolean]] = for {
+        optIdx ← FI.fetchKey(key, out.fildexFile.get()).asM
       } yield optIdx.isDefined
       prog
     }
 
-  def forceToWrite[F[_]](out: UFS3)(implicit F: Filler[F]): Kleisli[Id, CoreConfig, SOP[F, Unit]] = Kleisli { config ⇒
-    val prog: Id[SOP[F, Unit]] = F.forceToWrite(out.fillerFile.get())
+  def forceToWrite[F[_]](out: UFS3)(implicit F: Filler[F]): Kleisli[Id, CoreConfig, RespSOP[F, Unit]] = Kleisli { config ⇒
+    val prog: Id[RespSOP[F, Unit]] = F.forceToWrite(out.fillerFile.get())
     prog
   }
 
@@ -54,68 +54,61 @@ trait WriteProgam {
   // 2. travese sandwich body and write them
   // 3. write sandwich tail
   // Done: no index, no backup, no lock will be fixed at #17: add backup logic to core dsl
-  def write[F[_], IN](key: String, in: IN, out: UFS3)(implicit B: Block[F],
-                                                      F: Filler[F],
-                                                      //BAK: Backup[F],
-                                                      L: Log[F],
-                                                      FI: Fildex[F],
-                                                      S: SandwichIn[F, IN]): Kleisli[Id, CoreConfig, SOP[F, String]] =
+  def write[F[_], IN](key: String, in: IN, out: UFS3)(
+      implicit B: Block[F],
+      F: Filler[F],
+      //BAK: Backup[F],
+      L: Log[F],
+      FI: Fildex[F],
+      S: SandwichIn[F, IN]): Kleisli[Id, CoreConfig, RespSOP[F, String]] =
     Kleisli { coreConfig ⇒
       import L._
-      def prog(md: MessageDigest): Id[SOP[F, String]] =
+
+      def writeBody(md5: MessageDigest, pos: Long): RespSOP[F, Long] =
         for {
-          writing ← F.isWriting(out.fillerFile.get())
+          obb ← S.nextBody(in).asM
+          nextLength ← if (obb.nonEmpty) {
+            (for {
+              _ ← RespSOP.pure[F, Unit](md5.update(obb.get)).asM
+              _ ← B.seek(out.blockFile.get(), pos).asM
+              _ ← B.write(out.blockFile.get(), obb.get).asM
+              a ← writeBody(md5, pos + obb.get.limit()).asM
+              //_ ← debug(s"writing $key, from $pos, length: ${obb.get.limit()}")
+            } yield a).asM
+          } else RespSOP.pure[F, Long](0).asM
+        } yield nextLength + obb.map(_.limit()).getOrElse(0)
+
+      def md5Value(md: MessageDigest): String = md.digest().map("%02x".format(_)).mkString("")
+
+      def prog(md: MessageDigest): Id[RespSOP[F, String]] =
+        for {
+          writing ← F.isWriting(out.fillerFile.get()).asM
           optIdx ← if (writing) {
-            for {
-              _ ← warn(s"ufs3 is writing, please retry later! requesting key = $key")
-            } yield throw new IllegalAccessException("ufs3 is writing, please retry later")
-            //throw new IllegalAccessException("ufs3 is writing, please retry later")
-          } else FI.fetchKey(key, out.fildexFile.get())
-          _ ← info(s"writing for key: $key")
-          startPos ← if (optIdx.isEmpty) F.startAppend(out.fillerFile.get())
-          else {
-            for {
-              _ ← error(s"stop writing, $key has existed in ufs3")
-            } yield throw new IllegalArgumentException(s"$key has existed in ufs3")
-
-          }
-
-          headB ← S.head(key, EmptyUUID, 0) //length can't be detected
-          bodyLength ← {
-            def writeBody(md5: MessageDigest, pos: Long): SOP[F, Long] =
-              for {
-                obb ← S.nextBody(in)
-                nextLength ← if (obb.nonEmpty) {
-                  md5.update(obb.get)
-                  for {
-                    _ ← B.seek(out.blockFile.get(), pos)
-                    _ ← B.write(out.blockFile.get(), obb.get)
-                    a ← writeBody(md5, pos + obb.get.limit())
-                    _ ← debug(s"writing $key, from $pos, length: ${obb.get.limit()}")
-                  } yield a
-                } else
-                  Par.pure[F, Long](0): SOP[F, Long] // implicitly transformed by liftPAR_to_SOP
-                //_ ← if (obb.nonEmpty) BAK.send(obb.get) else Par.pure[F, Unit](()) // backup body
-              } yield nextLength + obb.map(_.limit()).getOrElse(0)
-            // 从 startpos + headB 的地方写入
-            writeBody(md, startPos + headB.limit())
-          }
-          md5   ← SOP.pure[F, String](md.digest().map("%02x".format(_)).mkString(""))
-          headB ← S.head(key, md5, bodyLength)
-          _     ← B.seek(out.blockFile.get(), startPos)
-          _     ← B.write(out.blockFile.get(), headB)
-          _     ← debug(s"writed $bodyLength bytes with key = $key, md5 = $md5")
-          tailB ← S.tail(md5.getBytes("iso8859_1"), bodyLength)
-          _     ← B.seek(out.blockFile.get(), startPos + headB.limit() + bodyLength)
-          _     ← B.write(out.blockFile.get(), tailB)
-          newFildexFile ← FI.append(out.fildexFile.get(),
-                                    Idx(key, md5, startPos, startPos + headB.limit() + bodyLength + tailB.limit()))
-          newFillerFile ← F.endAppend(out.fillerFile.get(),
-                                      startPos,
-                                      startPos + headB.limit() + bodyLength + tailB.limit())
+            RespSOP.error[F, Option[Idx]](new IllegalAccessException("ufs3 is writing, please retry later")).asM
+          } else FI.fetchKey(key, out.fildexFile.get()).asM
+          _ ← info(s"writing for key: $key").asM
+          startPos ← if (optIdx.isEmpty) F.startAppend(out.fillerFile.get()).asM
+          else RespSOP.error[F, Long](new IllegalArgumentException(s"$key has existed in ufs3")).asM
+          headB      ← S.head(key, EmptyUUID, 0).asM //length can't be detected, 预先设定为0
+          bodyLength ← writeBody(md, startPos + headB.limit()).asM
+          md5        ← RespSOP.pure[F, String](md5Value(md)).asM
+          headB      ← S.head(key, md5, bodyLength).asM
+          _          ← B.seek(out.blockFile.get(), startPos).asM
+          _          ← B.write(out.blockFile.get(), headB).asM
+          _          ← debug(s"writed $bodyLength bytes with key = $key, md5 = $md5").asM
+          tailB      ← S.tail(md5.getBytes("iso8859_1"), bodyLength).asM
+          _          ← B.seek(out.blockFile.get(), startPos + headB.limit() + bodyLength).asM
+          _          ← B.write(out.blockFile.get(), tailB).asM
+          newFildexFile ← FI
+            .append(out.fildexFile.get(),
+                    Idx(key, md5, startPos, startPos + headB.limit() + bodyLength + tailB.limit()))
+            .asM
+          newFillerFile ← F
+            .endAppend(out.fillerFile.get(), startPos, startPos + headB.limit() + bodyLength + tailB.limit())
+            .asM
           _ ← info(
             s"writed filler and fildex with key: $key. startPos: $startPos, endPos: ${startPos + headB.limit() + bodyLength + tailB
-              .limit()}")
+              .limit()}").asM
         } yield {
           out.fillerFile.set(newFillerFile)
           out.fildexFile.set(newFildexFile)

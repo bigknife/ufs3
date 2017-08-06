@@ -13,6 +13,7 @@ import java.io._
 import cats.data.{Coproduct, Kleisli}
 import cats.effect.IO
 import sop._
+import RespSOP._
 import ufs3.integration.config.UniConfig
 import ufs3.kernel.block.Block
 import ufs3.kernel.fildex.Fildex
@@ -42,39 +43,34 @@ trait GetCommand {
           (blockInterperter or fillerInterperter)))
   }
 
-  private def getWithKeyProg(coreConfig: CoreConfig, key: String, to: OutputStream): SOP[ReadApp, Unit] =
+  private def getWithKeyProg(coreConfig: CoreConfig, key: String, to: OutputStream): RespSOP[ReadApp, Unit] =
     for {
-      ufs3 ← openForRead[ReadApp].run(coreConfig)
-      _    ← readWithKey[ReadApp, OutputStream](key, ufs3, to).run(coreConfig)
-      _    ← shutdown[ReadApp](ufs3).run(coreConfig)
+      ufs3 ← openForRead[ReadApp].run(coreConfig).asM
+      _    ← readWithKey[ReadApp, OutputStream](key, ufs3, to).run(coreConfig).asM
+      _    ← shutdown[ReadApp](ufs3).run(coreConfig).asM
     } yield ()
 
-  private[command] def _runWithKey(coreConfig: CoreConfig, key: String, out: OutputStream): Try[Unit] = {
+  private[command] def _runWithKey(coreConfig: CoreConfig, key: String, out: OutputStream): Resp[Unit] = {
     val prog        = getWithKeyProg(coreConfig, key, out)
     val interpreter = getInterpreter
-    Try {
-      prog.foldMap(interpreter).run(UniConfig()).unsafeRunSync()
-    }
+    prog.foldMap(interpreter).run(UniConfig()).unsafeRunSync()
   }
 
-  private[command] def _idxOfKey(coreConfig: CoreConfig, key: String): Try[Option[Idx]] = {
+  private[command] def _idxOfKey(coreConfig: CoreConfig, key: String): Resp[Option[Idx]] = {
     val prog        = idxOfKey[ReadApp](key).run(coreConfig)
     val interpreter = getInterpreter
-    Try {
-      prog.foldMap(interpreter).run(UniConfig()).unsafeRunSync()
-    }
+    prog.foldMap(interpreter).run(UniConfig()).unsafeRunSync()
   }
 
-  def getToLocalFileWithKey(coreConfig: CoreConfig, key: String, to: File): Try[Unit] = {
+  def getToLocalFileWithKey(coreConfig: CoreConfig, key: String, to: File): Resp[Unit] = {
     // create key, md5 of file name
     val outputStream = new BufferedOutputStream(new FileOutputStream(to))
-    _runWithKey(coreConfig, key, outputStream).flatMap(_ ⇒ Try { outputStream.close() })
+    import cats.implicits._
+    _runWithKey(coreConfig, key, outputStream).map(_ ⇒ outputStream.close())
   }
 
-  def existed(coreConfig: CoreConfig, key: String): Try[Boolean] = {
-    Try {
+  def existed(coreConfig: CoreConfig, key: String): Resp[Boolean] = {
       existedKey[ReadApp](key).run(coreConfig).foldMap(getInterpreter).run(UniConfig()).unsafeRunSync()
-    }
   }
 }
 object GetCommand extends GetCommand

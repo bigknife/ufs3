@@ -19,13 +19,14 @@ import ufs3.kernel.log.Log
 
 import scala.language.higherKinds
 import core.data.Data._
+import RespSOP._
 
 trait CreateProgram {
 
   def create[F[_]](implicit B: Block[F],
                    F: Filler[F],
                    FI: Fildex[F],
-                   L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
+                   L: Log[F]): Kleisli[Id, CoreConfig, RespSOP[F, Unit]] =
     Kleisli { coreConfig ⇒
       val path = coreConfig.fillerBlockPath
       val size    = coreConfig.fillerBlockSize
@@ -37,26 +38,27 @@ trait CreateProgram {
 
       import L._
 
-      val prog: Id[SOP[F, Unit]] = for {
-        _           ← debug(s"try to create UFS3 system at path: $pathString and index path: $idxPathString")
-        _           ← debug(s"check filler existing $pathString")
-        fillerBeing ← B.existed(path)
-        _           ← debug(s"check fildex existing $idxPathString")
-        fildexBeing ← B.existed(idxPath)
-        _ ← if (!fillerBeing && !fildexBeing) {
-          for {
-            bfFiller ← B.create(path, size)
-            _        ← F.init(bfFiller)
-            _        ← info(s"created filler: $path")
-            bfFildex ← B.create(idxPath, idxSize)
-            _        ← FI.init(bfFildex)
-            _        ← info(s"created fildex: $idxPathString")
-            _        ← B.close(bfFildex)
-            _        ← B.close(bfFiller)
-          } yield ()
-        } else {
-          warn("filler or fildex has existed")
-        } : SOP[F, Unit]
+      val createProg: RespSOP[F, Unit] = for {
+        bfFiller ← B.create(path, size).asM
+        _ ← F.init(bfFiller).asM
+        _ ← info(s"created filler: $path").asM
+        bfFildex ← B.create(idxPath, idxSize).asM
+        _ ← FI.init(bfFildex).asM
+        _ ← info(s"created fildex: $idxPathString").asM
+        _ ← B.close(bfFildex).asM
+        _ ← B.close(bfFiller).asM
+      } yield ()
+
+      val warnProg: RespSOP[F, Unit] = for {
+        _ ← warn("filler or fildex has existed").asM
+      } yield ()
+
+
+      val prog: Id[RespSOP[F, Unit]] = for {
+        _           ← debug(s"check filler and fildex existing $pathString").asM
+        fillerBeing ← B.existed(path).asM
+        fildexBeing ← B.existed(idxPath).asM
+        _ ← (if (fillerBeing || fildexBeing) warnProg else createProg).asM
       } yield ()
       prog
     }

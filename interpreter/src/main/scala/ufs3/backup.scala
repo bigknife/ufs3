@@ -86,7 +86,7 @@ trait BackupInterpreter extends Handler[Kleisli[IO, Config, ?]] {
         Future.failed[Unit](new IOException(s"connector to ${config.backupHost}:${config.backupPort} not opened now"))
     })
   }
-  */
+ */
 }
 
 object BackupInterpreter {
@@ -106,7 +106,7 @@ object BackupInterpreter {
     def backupHost: String = _backupHost
     def backupPort: Int    = _backupPort
   }
-  /*
-    def apply(): BackupInterpreter = new BackupInterpreter() {}
-    */
+
+  //def apply(): BackupInterpreter = new BackupInterpreter() {}
+
 }

@@ -20,17 +20,18 @@ import ufs3.kernel.log.Log
 import core.data.Data._
 import ufs3.core.open.OpenProgram._
 import scala.language.higherKinds
+import RespSOP._
 
 trait FetchProgroam {
   def idxOfKey[F[_]](key: String)(implicit B: Block[F],
                                   F: Filler[F],
                                   FI: Fildex[F],
-                                  L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Option[Idx]]] = {
+                                  L: Log[F]): Kleisli[Id, CoreConfig, RespSOP[F, Option[Idx]]] = {
 
-    openForRead[F].andThen[SOP[F, Option[Idx]]]((x: SOP[F, UFS3]) ⇒ {
+    openForRead[F].andThen[RespSOP[F, Option[Idx]]]((x: RespSOP[F, UFS3]) ⇒ {
       for {
-        ufs3 ← x
-        idx  ← FI.fetchKey(key, ufs3.fildexFile.get())
+        ufs3 ← x.asM
+        idx  ← FI.fetchKey(key, ufs3.fildexFile.get()).asM
       } yield idx
     })
   }
@@ -38,12 +39,12 @@ trait FetchProgroam {
   def idxOfUuid[F[_]](uuid: String)(implicit B: Block[F],
                                     F: Filler[F],
                                     FI: Fildex[F],
-                                    L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Option[Idx]]] = {
+                                    L: Log[F]): Kleisli[Id, CoreConfig, RespSOP[F, Option[Idx]]] = {
 
-    openForRead[F].andThen[SOP[F, Option[Idx]]]((x: SOP[F, UFS3]) ⇒ {
+    openForRead[F].andThen[RespSOP[F, Option[Idx]]]((x: RespSOP[F, UFS3]) ⇒ {
       for {
-        ufs3 ← x
-        idx  ← FI.fetchUuid(uuid, ufs3.fildexFile.get())
+        ufs3 ← x.asM
+        idx  ← FI.fetchUuid(uuid, ufs3.fildexFile.get()).asM
       } yield idx
     })
   }
@@ -51,13 +52,13 @@ trait FetchProgroam {
   def existedKey[F[_]](key: String)(implicit B: Block[F],
                                     F: Filler[F],
                                     FI: Fildex[F],
-                                    L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Boolean]] = {
-    openForRead[F].andThen[SOP[F, Boolean]]((x: SOP[F, UFS3]) ⇒ {
+                                    L: Log[F]): Kleisli[Id, CoreConfig, RespSOP[F, Boolean]] = {
+    openForRead[F].andThen[RespSOP[F, Boolean]]((x: RespSOP[F, UFS3]) ⇒ {
       for {
-        ufs3 ← x
-        e    ← FI.fetchKey(key, ufs3.fildexFile.get())
-        _    ← F.close(ufs3.fillerFile.get())
-        _    ← FI.close(ufs3.fildexFile.get())
+        ufs3 ← x.asM
+        e    ← FI.fetchKey(key, ufs3.fildexFile.get()).asM
+        _    ← F.close(ufs3.fillerFile.get()).asM
+        _    ← FI.close(ufs3.fildexFile.get()).asM
       } yield e.nonEmpty
     })
   }
@@ -65,11 +66,11 @@ trait FetchProgroam {
   def list[F[_]](limit: Int, order: String)(implicit B: Block[F],
                                             F: Filler[F],
                                             FI: Fildex[F],
-                                            L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Vector[Idx]]] = {
-    openForRead[F].andThen[SOP[F, Vector[Idx]]]((x: SOP[F, UFS3]) ⇒
+                                            L: Log[F]): Kleisli[Id, CoreConfig, RespSOP[F, Vector[Idx]]] = {
+    openForRead[F].andThen[RespSOP[F, Vector[Idx]]]((x: RespSOP[F, UFS3]) ⇒
       for {
-        ufs3 ← x
-        idx  ← FI.query(limit, Fildex.Order(order), ufs3.fildexFile.get())
+        ufs3 ← x.asM
+        idx  ← FI.query(limit, Fildex.Order(order), ufs3.fildexFile.get()).asM
       } yield idx)
   }
 }

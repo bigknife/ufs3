@@ -46,6 +46,7 @@ object BackupMockServer extends BackupMockServer
   * Backup spec
   */
 class BackupSpec extends FlatSpec {
+  /*
   lazy val config: BackupInterpreter.Config = BackupInterpreter.config("localhost", 3800)
   "Backup" should "send the same data to backup server" in {
     info("start backup mock server")
@@ -69,4 +70,5 @@ class BackupSpec extends FlatSpec {
     BackupMockServer.stop()
     config.actorSystem.shutdown()
   }
+  */
 }

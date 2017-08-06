@@ -21,6 +21,7 @@ import ufs3.kernel.log.Log
 import scala.util.Try
 import ufs3.core.data.Data._
 import ufs3.core.freespace.FreeSpaceProgram._
+import cats.implicits._
 
 trait FreeCommand {
   type App1[A]    = Coproduct[Block.Op, Filler.Op, A]
@@ -31,17 +32,17 @@ trait FreeCommand {
   private val freeSpaceIntepreter: NT[ListApp, Kleisli[IO, UniConfig, ?]] =
     fildexInterperter or (logInterperter or (blockInterperter or fillerInterperter))
 
-  private def freeSpaceOfFillerProg(config: CoreConfig): SOP[ListApp, Long] = freeSpaceOfFiller[ListApp].run(config)
-  private def freeSpaceOfFildexProg(config: CoreConfig): SOP[ListApp, Long] = freeSpaceOfFildex[ListApp].run(config)
+  private def freeSpaceOfFillerProg(config: CoreConfig): RespSOP[ListApp, Long] = freeSpaceOfFiller[ListApp].run(config)
+  private def freeSpaceOfFildexProg(config: CoreConfig): RespSOP[ListApp, Long] = freeSpaceOfFildex[ListApp].run(config)
 
-  def runFreeSpaceOfFillerProg(config: CoreConfig, u: String): Try[Unit] = Try {
-    val freeSpace = freeSpaceOfFillerProg(config).foldMap(freeSpaceIntepreter).run(UniConfig()).unsafeRunSync()
-    println(render(freeSpace, u))
+  def runFreeSpaceOfFillerProg(config: CoreConfig, u: String): Resp[Unit] =  {
+    val freeSpace: Resp[Long] = freeSpaceOfFillerProg(config).foldMap(freeSpaceIntepreter).run(UniConfig()).unsafeRunSync()
+    freeSpace.map(x ⇒ println(render(x, u)))
   }
 
-  def runFreeSpaceOfFildexProg(config: CoreConfig, u: String): Try[Unit] = Try {
+  def runFreeSpaceOfFildexProg(config: CoreConfig, u: String): Resp[Unit] = {
     val freeSpace = freeSpaceOfFildexProg(config).foldMap(freeSpaceIntepreter).run(UniConfig()).unsafeRunSync()
-    println(render(freeSpace, u))
+    freeSpace.map(x ⇒ println(render(x, u)))
   }
 
   private def render(fs: Long, u: String): String = {
