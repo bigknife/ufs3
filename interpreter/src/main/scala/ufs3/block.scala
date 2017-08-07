@@ -27,112 +27,74 @@ trait BlockInterpreter extends Block.Handler[Kleisli[IO, Config, ?]] {
                                     mode: Block.FileMode): Kleisli[IO, Config, Resp[Block.BlockFile]] =
     Kleisli { config ⇒
       IO {
-        try {
-          Right(RandomAccessBlockFile(path, mode).value)
-        } catch {
-          case t: Throwable ⇒ Left(t)
-        }
-      }
-
+        RandomAccessBlockFile(path, mode).value
+      }.attempt
     }
 
   override protected[this] def close(bf: Block.BlockFile): Kleisli[IO, Config, Resp[Unit]] = Kleisli { config ⇒
-    IO { try { Right(bf.close()) } catch { case t: Throwable ⇒ Left(t) } }
+    IO { bf.close() }.attempt
   }
 
   override protected[this] def create(path: Block.Path, size: Block.Size): Kleisli[IO, Config, Resp[Block.BlockFile]] =
     Kleisli { config ⇒
       IO {
-        try {
-          Right(RandomAccessBlockFile(path, FileMode.ReadWrite).map(x ⇒ x.size(size.sizeInByte)).value)
-        } catch {
-          case t: Throwable ⇒ Left(t)
-        }
-      }
+        RandomAccessBlockFile(path, FileMode.ReadWrite).map(x ⇒ x.size(size.sizeInByte)).value
+      }.attempt
     }
 
   override protected[this] def delete(path: Block.Path): Kleisli[IO, Config, Resp[Unit]] = Kleisli { config ⇒
     IO {
-      try {
-        new File(path.file.value.getPath).delete()
-        Right(())
-      } catch {
-        case t: Throwable ⇒ Left(t)
-      }
-    }
+      new File(path.file.value.getPath).delete()
+      ()
+    }.attempt
   }
 
   override protected[this] def seek(blockFile: Block.BlockFile, pos: Long): Kleisli[IO, Config, Resp[Unit]] = Kleisli {
     config ⇒
       IO {
-        try {
-          Right(blockFile.seek(pos))
-        } catch {
-          case t: Throwable ⇒ Left(t)
-        }
-      }
+        blockFile.seek(pos)
+      }.attempt
   }
 
   override protected[this] def read(blockFile: Block.BlockFile,
                                     size: Block.Size): Kleisli[IO, Config, Resp[ByteBuffer]] =
     Kleisli { config ⇒
       IO {
-        try {
-          Right(blockFile.read(size.sizeInByte))
-        } catch {
-          case t: Throwable ⇒ Left(t)
-        }
-      }
+        blockFile.read(size.sizeInByte)
+      }.attempt
     }
 
   override protected[this] def write(blockFile: Block.BlockFile, data: ByteBuffer): Kleisli[IO, Config, Resp[Unit]] =
     Kleisli { config ⇒
       IO {
-        try {
-          Right(blockFile.write(data))
-        } catch {
-          case t: Throwable ⇒ Left(t)
-        }
-      }
+        blockFile.write(data)
+      }.attempt
     }
 
   override protected[this] def lock(blockFile: Block.BlockFile): Kleisli[IO, Config, Resp[Boolean]] = Kleisli { config ⇒
     IO {
-      try {
-        val lock = blockFile.lock()
-        if (lock == null) Right(false)
-        else {
-          lockMap.putIfAbsent(blockFile, lock)
-          Right(true)
-        }
-      } catch {
-        case t: Throwable ⇒ Left(t)
+      val lock = blockFile.lock()
+      if (lock == null) false
+      else {
+        lockMap.putIfAbsent(blockFile, lock)
+        true
       }
-    }
+    }.attempt
   }
 
   override protected[this] def unlock(blockFile: Block.BlockFile): Kleisli[IO, Config, Resp[Unit]] = Kleisli { config ⇒
     IO {
-      try {
-        val lock = lockMap.get(blockFile)
-        if (lock != null)
-          Right(lock.release())
-        else Right(())
-      } catch {
-        case t: Throwable ⇒ Left(t)
-      }
-
-    }
+      val lock = lockMap.get(blockFile)
+      if (lock != null)
+        lock.release()
+      else ()
+    }.attempt
   }
 
   override protected[this] def existed(path: Block.Path): Kleisli[IO, Config, Resp[Boolean]] = Kleisli { config ⇒
     IO {
-      try {
-        Right(new File(path.file.value.getPath).exists())
-      } catch {
-        case t: Throwable ⇒ Left(t)
-      }
-    }
+      new File(path.file.value.getPath).exists()
+    }.attempt
   }
 }
 

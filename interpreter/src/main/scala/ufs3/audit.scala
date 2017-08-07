@@ -17,14 +17,8 @@ trait AuditInterpreter extends Audit.Handler[Kleisli[IO, Config, ?]] with RMSupp
     import spray.json._
     implicit val auditJsonFormat = JsonFormat.BeginAuditFormat
     IO {
-      try {
-        val r = insertInto(config.collectionName, auditInfo.toJson).run(RMSupport.config(config.mongoUri)).unsafeRunSync()
-        Right(r)
-      } catch {
-        case t: Throwable ⇒ Left(t)
-      }
-
-    }
+      insertInto(config.collectionName, auditInfo.toJson).run(RMSupport.config(config.mongoUri)).unsafeRunSync()
+    }.attempt
 
   }
 
@@ -32,16 +26,10 @@ trait AuditInterpreter extends Audit.Handler[Kleisli[IO, Config, ?]] with RMSupp
     import spray.json._
     implicit val auditJsonFormat = JsonFormat.ProcessAuditFormat
     IO {
-      try {
-        val r = insertInto(config.collectionName, auditInfo.toJson)
-          .run(RMSupport.config(config.mongoUri))
-          .unsafeRunSync()
-        Right(r)
-      } catch {
-        case t: Throwable ⇒ Left(t)
-      }
-
-    }
+      insertInto(config.collectionName, auditInfo.toJson)
+        .run(RMSupport.config(config.mongoUri))
+        .unsafeRunSync()
+    }.attempt
 
   }
 
@@ -49,14 +37,10 @@ trait AuditInterpreter extends Audit.Handler[Kleisli[IO, Config, ?]] with RMSupp
     import spray.json._
     implicit val auditJsonFormat = JsonFormat.EndAuditFormat
     IO {
-      try {
-        Right(insertInto(config.collectionName, auditInfo.toJson)
-          .run(RMSupport.config(config.mongoUri))
-          .unsafeRunSync())
-      }catch {
-        case t: Throwable ⇒ Left(t)
-      }
-    }
+      insertInto(config.collectionName, auditInfo.toJson)
+        .run(RMSupport.config(config.mongoUri))
+        .unsafeRunSync()
+    }.attempt
 
   }
 }
