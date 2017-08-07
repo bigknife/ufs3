@@ -107,7 +107,7 @@ trait BackupSingleThread {
               writeUntilSuccess(_connector.get,
                                 _connection,
                                 BackupCommand.headBytes(magic = "SAND", event.key, bodyLength))
-              logger.debug("writed backup head")
+              logger.debug(s"writed backup head for key: ${event.key}")
               md5.reset()
               val out = new OutputStream {
                 val buffer: ListBuffer[Byte] = ListBuffer.empty
@@ -117,7 +117,7 @@ trait BackupSingleThread {
                     val bytes = buffer.toArray
                     md5.update(bytes)
                     writeUntilSuccess(_connector.get, _connection, ByteString(bytes))
-                    logger.debug(s"writed $bufSize Bytes")
+                    logger.debug(s"writed $bufSize Bytes for key: ${event.key}")
                     buffer.clear()
                   }
                   buffer.append(b.toByte)
@@ -130,7 +130,7 @@ trait BackupSingleThread {
                     md5.update(bytes)
                     writeUntilSuccess(_connector.get, _connection, ByteString(bytes))
                     logger.debug(
-                      s"closing, rest buffered writed ${buffer.size} Bytes, md5 is ${md5.digest().map("%02x" format _).mkString("")}")
+                      s"closing for key: ${event.key}, rest buffered writed ${buffer.size} Bytes, md5 is ${md5.digest().map("%02x" format _).mkString("")}")
                     buffer.clear()
                   }
                   super.close()
