@@ -24,6 +24,7 @@ import com.barcsys.tcp.connection.{Connection, TcpConnector}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.log4j.Logger
 import pharaoh.LogbackConfExtension
+import sop.Resp
 import ufs3.core.data.Data
 import ufs3.core.data.Data.CoreConfig
 import ufs3.interpreter.layout.{SandwichHeadLayout, SandwichTailLayout}
@@ -67,7 +68,7 @@ trait BackupSingleThread {
 
   val lock = new Object
 
-  lazy val thread = {
+  lazy val thread: Thread = {
     val t = new Thread(new Runnable {
       def run(): Unit = {
         handleQueue(queue)
@@ -77,26 +78,26 @@ trait BackupSingleThread {
         logger.info("handling backup thread queue")
         val event = queue.take()
         logger.info("got event from backup thread queu")
-        try {
-          workFor(event)
-        } catch {
-          case t: Throwable ⇒ logger.error(s"work for $event failed", t)
-        } finally {
-          logger.info(s"handled event $event, lock backup thread")
-          lock.synchronized { lock.wait() }
+        workFor(event) match {
+          case Right(_) ⇒
+            // 只有向备份服务器发出备份操作，才能加锁
+            logger.info(s"handled event $event, lock backup thread")
+            lock.synchronized { lock.wait() }
+          case Left(t1) ⇒
+            logger.error(s"handled event $event, but some exception raised", t1)
         }
 
         handleQueue(queue)
       }
-      private def workFor(event: BackupEvent): Unit = {
+      private def workFor(event: BackupEvent): Resp[Unit] = {
         logger.debug(s"Got backup event: $event")
-        //todo backup
+
         val _connector  = tcpConnector.get()
         val _connection = tcpConnection.get()
         if (_connector.isDefined) {
           val md5 = MessageDigest.getInstance("md5")
-          GetCommand._idxOfKey(coreConfig, event.key).map {
-            case Some(idx) ⇒
+          GetCommand._idxOfKey(coreConfig, event.key) match {
+            case Right(Some(idx)) ⇒
               // 1. Magic: "SAND"
               // 2. BODY_LENGTH, 8 (3#32 + 4#bodylength)
               // 3. KEY, 32
@@ -106,13 +107,7 @@ trait BackupSingleThread {
               writeUntilSuccess(_connector.get,
                                 _connection,
                                 BackupCommand.headBytes(magic = "SAND", event.key, bodyLength))
-              /*
-          _connector.get.write(BackupCommand.headBytes(magic = "SAND", event.key, bodyLength), Some(_connection.get)) onComplete {
-            case Success(x) ⇒ logger.debug(s"write to ${_connection.get}, success? $x")
-            case Failure(t) ⇒ logger.error(s"write to ${_connection.get} failed", t)
-          }
-               */
-              logger.debug("writed backup head")
+              logger.debug(s"writed backup head for key: ${event.key}")
               md5.reset()
               val out = new OutputStream {
                 val buffer: ListBuffer[Byte] = ListBuffer.empty
@@ -122,7 +117,7 @@ trait BackupSingleThread {
                     val bytes = buffer.toArray
                     md5.update(bytes)
                     writeUntilSuccess(_connector.get, _connection, ByteString(bytes))
-                    logger.debug(s"writed $bufSize Bytes")
+                    logger.debug(s"writed $bufSize Bytes for key: ${event.key}")
                     buffer.clear()
                   }
                   buffer.append(b.toByte)
@@ -135,22 +130,33 @@ trait BackupSingleThread {
                     md5.update(bytes)
                     writeUntilSuccess(_connector.get, _connection, ByteString(bytes))
                     logger.debug(
-                      s"closing, rest buffered writed ${buffer.size} Bytes, md5 is ${md5.digest().map("%02x" format _).mkString("")}")
+                      s"closing for key: ${event.key}, rest buffered writed ${buffer.size} Bytes, md5 is ${md5.digest().map("%02x" format _).mkString("")}")
                     buffer.clear()
                   }
                   super.close()
                 }
               }
               GetCommand._runWithKey(coreConfig, event.key, out) match {
-                case Success(_) ⇒ logger.info(s"backup successfully for ${event.key}")
-                case Failure(t) ⇒ logger.error(s"backup failed for ${event.key}", t)
+                case x @ Right(_) ⇒
+                  logger.info(s"backup successfully for ${event.key}")
+                  out.close()
+                  x
+                case x @ Left(t1) ⇒
+                  logger.error(s"backup failed for ${event.key}", t1)
+                  out.close()
+                  x
               }
-              out.close()
-            case None ⇒ Future.failed(new Exception(s"${event.key} not found in ufs3"))
-          }
-          ()
-        }
 
+            case Right(None) ⇒
+              logger.error(s"${event.key} not found in ufs3")
+              Left(new IllegalArgumentException(s"${event.key} not found in ufs3"))
+
+            case Left(t1) ⇒
+              logger.error(s"backup failed for ${event.key}", t1)
+              Resp.error[Unit](t1)
+          }
+        }
+        else Left(new IllegalStateException("connection to back up server not connected now"))
       }
     })
     t.setName("backup-thread")

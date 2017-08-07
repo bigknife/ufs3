@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicReference
 import cats.data.{Coproduct, Kleisli}
 import cats.effect.IO
 import sop._
+import ufs3.core.data.Data
 import ufs3.core.data.Data._
 import ufs3.integration.config.UniConfig
 import ufs3.kernel.block.Block
@@ -26,7 +27,8 @@ import ufs3.integration.interpreter._
 import ufs3.kernel.sandwich.SandwichIn
 import ufs3.core.open.OpenProgram._
 import ufs3.core.write.WriteProgam._
-
+import cats.implicits._
+import RespSOP._
 import scala.util.{Failure, Success, Try}
 
 trait PutCommand {
@@ -46,53 +48,48 @@ trait PutCommand {
           (blockInterperter or fillerInterperter)))
   }
 
-  def writableUfs3(coreConfig: CoreConfig): UFS3 = {
-    if (ufs3Cache.get().isDefined) ufs3Cache.get().get
+  def writableUfs3(coreConfig: CoreConfig): Resp[UFS3] = {
+    if (ufs3Cache.get().isDefined) Right(ufs3Cache.get().get)
     else {
-      val p: SOP[WriteApp, UFS3] = openForWrite[WriteApp].run(coreConfig)
-      val _ufs3 = p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
-      ufs3Cache.set(Some(_ufs3))
+      val p: RespSOP[WriteApp, UFS3] = openForWrite[WriteApp].run(coreConfig)
+      val _ufs3: Resp[Data.UFS3]     = p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
+      _ufs3.map(x ⇒ ufs3Cache.set(Some(x)))
       _ufs3
     }
   }
 
-  private def putProg(coreConfig: CoreConfig, key: String, ins: InputStream): SOP[WriteApp, String] =
+  private def putProg(coreConfig: CoreConfig, key: String, ins: InputStream): RespSOP[WriteApp, String] =
     for {
-      ufs3 ← openForWrite[WriteApp].run(coreConfig)
-      uuid ← write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig)
-      _ ← forceToWrite[WriteApp](ufs3).run(coreConfig)
+      ufs3 ← openForWrite[WriteApp].run(coreConfig).asM
+      uuid ← write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig).asM
+      _    ← forceToWrite[WriteApp](ufs3).run(coreConfig).asM
     } yield uuid
 
-  def _run(coreConfig: CoreConfig, key: String, ins: InputStream): Try[String] = {
+  def _run(coreConfig: CoreConfig, key: String, ins: InputStream): Resp[String] = {
     val prog        = putProg(coreConfig, key, ins)
     val interpreter = putInterpreter
-    Try {
-      prog.foldMap(interpreter).run(UniConfig()).unsafeRunSync()
-    }
+    prog.foldMap(interpreter).run(UniConfig()).unsafeRunSync()
   }
 
-  def _ufs3IsWriting(coreConfig: CoreConfig, ufs3: UFS3): Either[String, Unit] = {
+  def _ufs3IsWriting(coreConfig: CoreConfig, ufs3: UFS3): Resp[Unit] = {
     val p = isWritable[WriteApp](ufs3).run(coreConfig)
     p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
   }
 
-  def _ufs3ExistedKey(coreConfig: CoreConfig, key: String, ufs3: UFS3): Boolean = {
+  def _ufs3ExistedKey(coreConfig: CoreConfig, key: String, ufs3: UFS3): Resp[Boolean] = {
     val p = existedKey[WriteApp](key, ufs3).run(coreConfig)
     p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
   }
 
-  def _runWithUfs3(coreConfig: CoreConfig, key: String, ins: InputStream, ufs3: UFS3): Try[String] = {
-    Try {
-      val p: SOP[WriteApp, String] = write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig)
-      p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
-    }.transform(Success(_), {
+  def _runWithUfs3(coreConfig: CoreConfig, key: String, ins: InputStream, ufs3: UFS3): Resp[String] = {
+    val p: RespSOP[WriteApp, String] = write[WriteApp, InputStream](key, ins, ufs3).run(coreConfig)
+    val s                            = p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
+    s.left.foreach {
       t: Throwable ⇒
-        // 出异常了，则需要让ufs3恢复为可写状态
-        val p: SOP[WriteApp, Unit] = forceToWrite[WriteApp](ufs3).run(coreConfig)
+        val p: RespSOP[WriteApp, Unit] = forceToWrite[WriteApp](ufs3).run(coreConfig)
         p.foldMap(putInterpreter).run(UniConfig()).unsafeRunSync()
-        Failure(t)
-    })
-
+    }
+    s
   }
 
   def repeat(x: String, n: Int): String = {
@@ -105,7 +102,7 @@ trait PutCommand {
   }
 
   // return (key, uuid) tuple2
-  def writeLocalFile(coreConfig: CoreConfig, file: File, key: Option[String]): Try[(String, String)] = {
+  def writeLocalFile(coreConfig: CoreConfig, file: File, key: Option[String]): Resp[(String, String)] = {
     // create key, md5 of file name
     val _key = key
       .map(to32str)

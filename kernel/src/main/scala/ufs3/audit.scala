@@ -22,26 +22,26 @@ import sop._
 sealed trait Audit[F[_]] {
   import Audit._
 
-  def begin(auditInfo: BeginAudit): Par[F, Unit]
-  def process(auditInfo: ProcessAudit): Par[F, Unit]
-  def end(auditInfo: EndAudit): Par[F, Unit]
+  def begin(auditInfo: BeginAudit): RespPar[F, Unit]
+  def process(auditInfo: ProcessAudit): RespPar[F, Unit]
+  def end(auditInfo: EndAudit): RespPar[F, Unit]
 }
 object Audit {
 
   sealed trait Op[A]
 
-  case class Begin(auditInfo: BeginAudit) extends Op[Unit]
+  case class Begin(auditInfo: BeginAudit) extends Op[Resp[Unit]]
 
-  case class Process(auditInfo: ProcessAudit) extends Op[Unit]
+  case class Process(auditInfo: ProcessAudit) extends Op[Resp[Unit]]
 
-  case class End(auditInfo: EndAudit) extends Op[Unit]
+  case class End(auditInfo: EndAudit) extends Op[Resp[Unit]]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Audit[F] {
-    def begin(auditInfo: BeginAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](Begin(auditInfo))
+    def begin(auditInfo: BeginAudit): RespPar[F, Unit] = liftPar_T[Op, F, Resp[Unit]](Begin(auditInfo))
 
-    def process(auditInfo: ProcessAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](Process(auditInfo))
+    def process(auditInfo: ProcessAudit): RespPar[F, Unit] = liftPar_T[Op, F, Resp[Unit]](Process(auditInfo))
 
-    def end(auditInfo: EndAudit): Par[F, Unit] = liftPar_T[Op, F, Unit](End(auditInfo))
+    def end(auditInfo: EndAudit): RespPar[F, Unit] = liftPar_T[Op, F, Resp[Unit]](End(auditInfo))
   }
 
   implicit def to[F[_]](implicit I: Inject[Op, F]) = new To[F]
@@ -49,11 +49,11 @@ object Audit {
   def apply[F[_]](implicit A: Audit[F]): Audit[F] = A
 
   trait Handler[M[_]] extends NT[Op, M] {
-    protected[this] def begin(auditInfo: BeginAudit): M[Unit]
+    protected[this] def begin(auditInfo: BeginAudit): M[Resp[Unit]]
 
-    protected[this] def process(auditInfo: ProcessAudit): M[Unit]
+    protected[this] def process(auditInfo: ProcessAudit): M[Resp[Unit]]
 
-    protected[this] def end(auditInfo: EndAudit): M[Unit]
+    protected[this] def end(auditInfo: EndAudit): M[Resp[Unit]]
 
     override def apply[A](fa: Op[A]): M[A] = fa match {
       case Begin(auditInfo)   ⇒ begin(auditInfo)

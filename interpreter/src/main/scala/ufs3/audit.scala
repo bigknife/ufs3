@@ -7,29 +7,41 @@ import cats.effect.IO
 import infr.{JsonFormat, RMSupport}
 import ufs3.audit.interprer.AuditInterpreter.Config
 import ufs3.kernel.audit.Audit
+import sop._
 
 /**
   * Created by songwenchao on 2017/7/17.
   */
 trait AuditInterpreter extends Audit.Handler[Kleisli[IO, Config, ?]] with RMSupport {
-  override def begin(auditInfo: Audit.BeginAudit): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
+  override def begin(auditInfo: Audit.BeginAudit): Kleisli[IO, Config, Resp[Unit]] = Kleisli { config ⇒
     import spray.json._
     implicit val auditJsonFormat = JsonFormat.BeginAuditFormat
-    insertInto(config.collectionName, auditInfo.toJson).run(RMSupport.config(config.mongoUri))
+    IO {
+      insertInto(config.collectionName, auditInfo.toJson).run(RMSupport.config(config.mongoUri)).unsafeRunSync()
+    }.attempt
+
   }
 
-  override def process(auditInfo: Audit.ProcessAudit): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
+  override def process(auditInfo: Audit.ProcessAudit): Kleisli[IO, Config, Resp[Unit]] = Kleisli { config ⇒
     import spray.json._
     implicit val auditJsonFormat = JsonFormat.ProcessAuditFormat
-    insertInto(config.collectionName, auditInfo.toJson)
-      .run(RMSupport.config(config.mongoUri))
+    IO {
+      insertInto(config.collectionName, auditInfo.toJson)
+        .run(RMSupport.config(config.mongoUri))
+        .unsafeRunSync()
+    }.attempt
+
   }
 
-  override def end(auditInfo: Audit.EndAudit): Kleisli[IO, Config, Unit] = Kleisli { config ⇒
+  override def end(auditInfo: Audit.EndAudit): Kleisli[IO, Config, Resp[Unit]] = Kleisli { config ⇒
     import spray.json._
     implicit val auditJsonFormat = JsonFormat.EndAuditFormat
-    insertInto(config.collectionName, auditInfo.toJson)
-      .run(RMSupport.config(config.mongoUri))
+    IO {
+      insertInto(config.collectionName, auditInfo.toJson)
+        .run(RMSupport.config(config.mongoUri))
+        .unsafeRunSync()
+    }.attempt
+
   }
 }
 

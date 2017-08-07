@@ -25,7 +25,7 @@ import ufs3.integration.command.backupserver.PutActor.RunWithUFS3
 
 import scala.annotation.tailrec
 import scala.util.{Failure, Success}
-
+import cats.implicits._
 object BackupLogger {
   val logger: Logger = Logger.getLogger("backup")
 }
@@ -45,11 +45,11 @@ class PutActor(coreConfig: CoreConfig) extends Actor {
             write()
           case Right(_) =>
             PutCommand._runWithUfs3(coreConfig, key, in, ufs3) match {
-              case Success(str) ⇒
+              case Right(str) ⇒
                 logger.debug(s"put command successfully $str")
                 _sender ! WriteCompleted(key, None)
 
-              case Failure(t) ⇒
+              case Left(t) ⇒
                 logger.error("put command failed", t)
                 _sender ! WriteCompleted(key, Some(t))
             }
@@ -69,7 +69,7 @@ class BackupActor(coreConfig: CoreConfig) extends Actor {
 
   val ufs3 = new AtomicReference[UFS3]()
   override def preStart(): Unit = {
-    ufs3.set(PutCommand.writableUfs3(coreConfig))
+    PutCommand.writableUfs3(coreConfig).map(x ⇒ ufs3.set(x))
     super.preStart()
   }
 

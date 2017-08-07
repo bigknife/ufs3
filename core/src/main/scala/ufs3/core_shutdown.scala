@@ -18,21 +18,21 @@ import ufs3.kernel.filler.Filler
 import ufs3.kernel.log.Log
 import core.data.Data._
 import scala.language.higherKinds
-
+import RespSOP._
 trait ShutdownProgram {
   def shutdown[F[_]](
-      ufs3: UFS3)(implicit B: Block[F], F: Filler[F], FI: Fildex[F], L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Unit]] =
+      ufs3: UFS3)(implicit B: Block[F], F: Filler[F], FI: Fildex[F], L: Log[F]): Kleisli[Id, CoreConfig, RespSOP[F, Unit]] =
     Kleisli { coreConfig ⇒
       import L._
-      val prog: Id[SOP[F, Unit]] = for {
-        _ ← debug("close filler file")
-        _ ← F.close(ufs3.fillerFile.get())
-        _ ← debug("close fildex file")
-        _ ← FI.close(ufs3.fildexFile.get())
-        _ ← debug("unlock block file")
-        _ ← B.unlock(ufs3.blockFile.get())
-        _ ← debug("close block file")
-        _ ← B.close(ufs3.blockFile.get())
+      val prog: Id[RespSOP[F, Unit]] = for {
+        _ ← debug("close filler file").asM
+        _ ← F.close(ufs3.fillerFile.get()).asM
+        _ ← debug("close fildex file").asM
+        _ ← FI.close(ufs3.fildexFile.get()).asM
+        _ ← debug("unlock block file").asM
+        _ ← B.unlock(ufs3.blockFile.get()).asM
+        _ ← debug("close block file").asM
+        _ ← B.close(ufs3.blockFile.get()).asM
       } yield ()
       prog
     }

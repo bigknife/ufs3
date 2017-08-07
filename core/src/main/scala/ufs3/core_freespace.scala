@@ -19,17 +19,17 @@ import ufs3.kernel.log.Log
 import core.data.Data._
 import scala.language.higherKinds
 import ufs3.core.open.OpenProgram._
-
+import RespSOP._
 trait FreeSpaceProgram {
   /**query free space of filler index file*/
   def freeSpaceOfFildex[F[_]](implicit B: Block[F],
                               F: Filler[F],
                               FI: Fildex[F],
-                              L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Long]] = {
-    openForRead[F].andThen[SOP[F, Long]]((x: SOP[F, UFS3]) ⇒ {
+                              L: Log[F]): Kleisli[Id, CoreConfig, RespSOP[F, Long]] = {
+    openForRead[F].andThen[RespSOP[F, Long]]((x: RespSOP[F, UFS3]) ⇒ {
       for {
-        ufs3 ← x
-        l    ← FI.freeSpace(ufs3.fildexFile.get())
+        ufs3 ← x.asM
+        l    ← FI.freeSpace(ufs3.fildexFile.get()).asM
       } yield l
     })
   }
@@ -38,11 +38,11 @@ trait FreeSpaceProgram {
   def freeSpaceOfFiller[F[_]](implicit B: Block[F],
                               F: Filler[F],
                               FI: Fildex[F],
-                              L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Long]] = {
-    openForRead[F].andThen[SOP[F, Long]]((x: SOP[F, UFS3]) ⇒ {
+                              L: Log[F]): Kleisli[Id, CoreConfig, RespSOP[F, Long]] = {
+    openForRead[F].andThen[RespSOP[F, Long]]((x: RespSOP[F, UFS3]) ⇒ {
       for {
-        ufs3 ← x
-        l    ← F.freeSpace(ufs3.fillerFile.get())
+        ufs3 ← x.asM
+        l    ← F.freeSpace(ufs3.fillerFile.get()).asM
       } yield l
     })
   }

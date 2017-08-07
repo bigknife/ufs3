@@ -21,43 +21,40 @@ import ufs3.kernel.fildex.Fildex
 import ufs3.kernel.filler.Filler
 import ufs3.kernel.log.Log
 import core.data.Data._
+
 import scala.language.higherKinds
+import RespSOP._
+import ufs3.kernel.fildex.Fildex.FildexFile
 
 trait RepairProgram {
   def repairFildex[F[_]](implicit B: Block[F],
                          F: Filler[F],
                          FI: Fildex[F],
-                         L: Log[F]): Kleisli[Id, CoreConfig, SOP[F, Unit]] = {
+                         L: Log[F]): Kleisli[Id, CoreConfig, RespSOP[F, Unit]] = {
     Kleisli { config ⇒
       val path       = config.fillerBlockPath
-      val pathString = path.file.value.getAbsolutePath
-
       import L._
-      val prog: Id[SOP[F, Unit]] = for {
-        being       ← B.existed(path)
-        _           ← if (!being) throw new IOException(s"file not exists: $pathString") else SOP.pure[F, Unit](())
-        fildexBeing ← B.existed(path.indexPath)
-        _ ← (if (fildexBeing) info(s"index file existed: ${path.indexPath.file.value}")
-        else
-          for {
-            _ ← warn("index file lost, create a new index file now")
-            a ← B.create(path.indexPath, config.idxBlockSize)
-            _ ← FI.init(a)
-            _ ← info(s"a new index file created and initialized: ${path.indexPath.file.value}")
-          } yield ()): SOP[F, Unit]
 
-        bf    ← B.open(path, FileMode.ReadWrite)
-        bfi   ← B.open(path.indexPath, FileMode.ReadWrite)
-        ff    ← F.check(bf)
-        idxOk ← FI.check(bfi, ff)
-        _ ← (if (idxOk) info("the index file is consistent with filler file, unnecessary to repair.")
-        else {
-          for {
-            _ ← info("start to repair the index file")
-            _ ← FI.repair(bfi, ff)
-            _ ← info("repair successfully!")
+      val createIdxProg: RespSOP[F, Unit] = for {
+        _ ← warn("index file lost, create a new index file now").asM
+        a ← B.create(path.indexPath, config.idxBlockSize).asM
+        _ ← FI.init(a).asM
+        _ ← info(s"a new index file created and initialized: ${path.indexPath.file.value}").asM
+      } yield ()
+
+      val prog: Id[RespSOP[F, Unit]] = for {
+        fildexBeing ← B.existed(path.indexPath).asM
+        _ ← (if (fildexBeing) RespSOP.pure[F, Unit](()) else createIdxProg).asM
+        bf    ← B.open(path, FileMode.ReadWrite).asM
+        bfi   ← B.open(path.indexPath, FileMode.ReadWrite).asM
+        ff    ← F.check(bf).asM
+        idxOk ← FI.check(bfi, ff).asM
+        _ ← if (idxOk) RespSOP.pure[F, Unit](()).asM else {
+          val s: RespSOP[F, Unit] = for {
+            _ ← FI.repair(bfi, ff).asM
           } yield ()
-        }): SOP[F, Unit]
+          s.asM
+        }
       } yield ()
       prog
     }

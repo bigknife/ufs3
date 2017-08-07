@@ -37,6 +37,7 @@ lazy val core = (project in file("core"))
   .dependsOn(kernel)
   .settings(commonSettings: _*)
 
+
 lazy val interpreter = (project in file("interpreter"))
   .dependsOn(kernel)
   .settings(commonSettings: _*)
@@ -50,6 +51,7 @@ lazy val interpreter = (project in file("interpreter"))
     libraryDependencies += "org.scalactic"     %% "scalactic"              % "3.0.1",
     libraryDependencies += "org.scalatest"     %% "scalatest"              % "3.0.1" % "test"
   )
+
 
 lazy val integration = (project in file("integration"))
   .dependsOn(core)

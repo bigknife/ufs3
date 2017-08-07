@@ -132,9 +132,12 @@ trait PutActor extends Actor {
   lazy val ufs3: UFS3 = {
     if (ufs3Holder.get().isDefined) ufs3Holder.get().get
     else {
-      val _u = PutCommand.writableUfs3(coreConfig)
-      ufs3Holder.set(Some(_u))
-      _u
+      PutCommand.writableUfs3(coreConfig) match {
+        case Left(t) ⇒ throw t
+        case Right(b) ⇒
+          ufs3Holder.set(Some(b))
+          b
+      }
     }
   }
   lazy val backupThread: AtomicReference[Option[BackupSingleThread]] = {
@@ -165,9 +168,9 @@ trait PutActor extends Actor {
             write()
           case Right(_) =>
             PutCommand._runWithUfs3(coreConfig, key, ins, ufs3) match {
-              case Success(_) ⇒ // println("put ok")
+              case Right(_) ⇒ // println("put ok")
                 _sender ! None
-              case Failure(x) ⇒ //x.printStackTrace()
+              case Left(x) ⇒ //x.printStackTrace()
                 _sender ! Some(x)
             }
         }

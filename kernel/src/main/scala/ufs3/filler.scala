@@ -19,40 +19,39 @@ import sop._
 trait Filler[F[_]] {
   import Filler.FillerFile
 
-  def init(bf: BlockFile): Par[F, FillerFile]
-  def check(bf: BlockFile): Par[F, FillerFile]
-  def close(ff: FillerFile): Par[F, Unit]
+  def init(bf: BlockFile): RespPar[F, FillerFile]
+  def check(bf: BlockFile): RespPar[F, FillerFile]
+  def close(ff: FillerFile): RespPar[F, Unit]
   // allocate space for new sandwich, return the startpoint
-  def startAppend(ff: FillerFile): Par[F, Long]
-  def endAppend(ff: FillerFile, startPosition: Long, endPosition: Long): Par[F, FillerFile]
-  def freeSpace(ff: FillerFile): Par[F, Long]
-  def isWriting(ff: FillerFile): Par[F, Boolean]
-  def forceToWrite(ff: FillerFile): Par[F, Unit]
+  def startAppend(ff: FillerFile): RespPar[F, Long]
+  def endAppend(ff: FillerFile, startPosition: Long, endPosition: Long): RespPar[F, FillerFile]
+  def freeSpace(ff: FillerFile): RespPar[F, Long]
+  def isWriting(ff: FillerFile): RespPar[F, Boolean]
+  def forceToWrite(ff: FillerFile): RespPar[F, Unit]
 }
 object Filler {
   sealed trait Op[A]
-  final case class Init(bf: BlockFile)                                               extends Op[FillerFile]
-  final case class Check(bf: BlockFile)                                              extends Op[FillerFile]
-  final case class Close(ff: FillerFile)                                             extends Op[Unit]
-  final case class StartAppend(ff: FillerFile)                                       extends Op[Long]
-  final case class EndAppend(ff: FillerFile, startPosition: Long, endPosition: Long) extends Op[FillerFile]
-  final case class FreeSpace(ff: FillerFile)                                         extends Op[Long]
-  final case class IsWriting(ff: FillerFile)                                         extends Op[Boolean]
-  final case class ForceToWrite(ff: FillerFile)                                      extends Op[Unit]
+  final case class Init(bf: BlockFile)                                               extends Op[Resp[FillerFile]]
+  final case class Check(bf: BlockFile)                                              extends Op[Resp[FillerFile]]
+  final case class Close(ff: FillerFile)                                             extends Op[Resp[Unit]]
+  final case class StartAppend(ff: FillerFile)                                       extends Op[Resp[Long]]
+  final case class EndAppend(ff: FillerFile, startPosition: Long, endPosition: Long) extends Op[Resp[FillerFile]]
+  final case class FreeSpace(ff: FillerFile)                                         extends Op[Resp[Long]]
+  final case class IsWriting(ff: FillerFile)                                         extends Op[Resp[Boolean]]
+  final case class ForceToWrite(ff: FillerFile)                                      extends Op[Resp[Unit]]
 
   class To[F[_]](implicit I: Inject[Op, F]) extends Filler[F] {
-    def init(bf: BlockFile): Par[F, FillerFile]   = liftPar_T[Op, F, FillerFile](Init(bf))
-    def check(bf: BlockFile): Par[F, FillerFile]  = liftPar_T[Op, F, FillerFile](Check(bf))
-    def close(ff: FillerFile): Par[F, Unit]       = liftPar_T[Op, F, Unit](Close(ff))
-    def startAppend(ff: FillerFile): Par[F, Long] = liftPar_T[Op, F, Long](StartAppend(ff))
-    def endAppend(ff: FillerFile, startPosition: Long, endPosition: Long): Par[F, FillerFile] =
-      liftPar_T[Op, F, FillerFile](EndAppend(ff, startPosition, endPosition))
+    def init(bf: BlockFile): RespPar[F, FillerFile]   = liftPar_T[Op, F, Resp[FillerFile]](Init(bf))
+    def check(bf: BlockFile): RespPar[F, FillerFile]  = liftPar_T[Op, F, Resp[FillerFile]](Check(bf))
+    def close(ff: FillerFile): RespPar[F, Unit]       = liftPar_T[Op, F, Resp[Unit]](Close(ff))
+    def startAppend(ff: FillerFile): RespPar[F, Long] = liftPar_T[Op, F, Resp[Long]](StartAppend(ff))
 
-    def freeSpace(ff: FillerFile): Par[F, Long] = liftPar_T[Op, F, Long](FreeSpace(ff))
+    def endAppend(ff: FillerFile, startPosition: Long, endPosition: Long): RespPar[F, FillerFile] =
+      liftPar_T[Op, F, Resp[FillerFile]](EndAppend(ff, startPosition, endPosition))
 
-    def isWriting(ff: FillerFile): Par[F, Boolean] = liftPar_T[Op, F, Boolean](IsWriting(ff))
-
-    def forceToWrite(ff: FillerFile): Par[F, Unit] = liftPar_T[Op, F, Unit](ForceToWrite(ff))
+    def freeSpace(ff: FillerFile): RespPar[F, Long]    = liftPar_T[Op, F, Resp[Long]](FreeSpace(ff))
+    def isWriting(ff: FillerFile): RespPar[F, Boolean] = liftPar_T[Op, F, Resp[Boolean]](IsWriting(ff))
+    def forceToWrite(ff: FillerFile): RespPar[F, Unit] = liftPar_T[Op, F, Resp[Unit]](ForceToWrite(ff))
   }
 
   implicit def to[F[_]](implicit I: Inject[Op, F]): Filler[F] = new To[F]
@@ -60,14 +59,14 @@ object Filler {
   def apply[F[_]](implicit F: Filler[F]): Filler[F] = F
 
   trait Handler[M[_]] extends NT[Op, M] {
-    def init(blockFile: BlockFile): M[FillerFile]
-    def check(blockFile: BlockFile): M[FillerFile]
-    def close(ff: FillerFile): M[Unit]
-    def startAppend(ff: FillerFile): M[Long]
-    def endAppend(ff: FillerFile, startPosition: Long, endPosition: Long): M[FillerFile]
-    def freeSpace(ff: FillerFile): M[Long]
-    def isWriting(ff: FillerFile): M[Boolean]
-    def forceToWrite(ff: FillerFile): M[Unit]
+    def init(blockFile: BlockFile): M[Resp[FillerFile]]
+    def check(blockFile: BlockFile): M[Resp[FillerFile]]
+    def close(ff: FillerFile): M[Resp[Unit]]
+    def startAppend(ff: FillerFile): M[Resp[Long]]
+    def endAppend(ff: FillerFile, startPosition: Long, endPosition: Long): M[Resp[FillerFile]]
+    def freeSpace(ff: FillerFile): M[Resp[Long]]
+    def isWriting(ff: FillerFile): M[Resp[Boolean]]
+    def forceToWrite(ff: FillerFile): M[Resp[Unit]]
 
     override def apply[A](fa: Op[A]): M[A] = fa match {
       case Init(bf)                                  ⇒ init(bf)
