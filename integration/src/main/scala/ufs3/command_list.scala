@@ -23,7 +23,7 @@ import ufs3.core.data.Data._
 import ufs3.core.fetch.FetchProgroam._
 
 import scala.util.Try
-
+import cats.implicits._
 trait ListCommand {
   type App1[A]    = Coproduct[Block.Op, Filler.Op, A]
   type App2[A]    = Coproduct[Log.Op, App1, A]
@@ -32,15 +32,13 @@ trait ListCommand {
 
   private val listIntepreter: NT[ListApp, Kleisli[IO, UniConfig, ?]] =
     fildexInterperter or (logInterperter or (blockInterperter or fillerInterperter))
-  private def listProg(config: CoreConfig, limit: Int, order: String): SOP[ListApp, Vector[Idx]] =
+  private def listProg(config: CoreConfig, limit: Int, order: String): RespSOP[ListApp, Vector[Idx]] =
     list[ListApp](limit, order).run(config)
 
-  def run(config: CoreConfig, limit: Int, order: String): Try[Unit] = {
-    Try {
-      val idxs = listProg(config, limit, order).foldMap(listIntepreter).run(UniConfig()).unsafeRunSync()
+  def run(config: CoreConfig, limit: Int, order: String): Resp[Unit] = {
+      val idxs: Resp[Vector[Idx]] = listProg(config, limit, order).foldMap(listIntepreter).run(UniConfig()).unsafeRunSync()
       // render idxs
-      print(render(idxs))
-    }
+      idxs.map(x ⇒ println(render(x)))
   }
 
   private def render(idxs: Vector[Idx]): String = {

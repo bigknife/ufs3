@@ -31,17 +31,20 @@ import scala.util.{Failure, Success}
 object DownloadLogger {
   val logger: Logger = Logger.getLogger("download")
 }
+object PutLogger {
+  val logger: Logger = Logger.getLogger("put")
+}
 
 class DownloadActor extends Actor {
   import DownloadLogger.logger._
   def receive: Receive = {
     case DownloadActor.Download(config, key, out, in) ⇒
       GetCommand._runWithKey(config, key, out) match {
-        case Success(_) ⇒
+        case Right(_) ⇒
           info("GetCommand succeeded")
           out.close()
 
-        case Failure(t) ⇒
+        case Left(t) ⇒
           error("GetCommand failed", t)
           out.write(t.getMessage.getBytes("utf-8"))
           out.close()
@@ -81,9 +84,9 @@ trait ServeCommand extends SimplePharaohApp {
           }
 
           GetCommand.existed(config, key) match {
-            case Success(true)  ⇒ read
-            case Success(false) ⇒ HttpResponse(status = StatusCodes.NotFound, entity = s"$key not found")
-            case Failure(t)     ⇒ throw t
+            case Right(true)  ⇒ read
+            case Right(false) ⇒ HttpResponse(status = StatusCodes.NotFound, entity = s"$key not found")
+            case Left(t)      ⇒ throw t
           }
         }
       }
@@ -110,19 +113,35 @@ trait ServeCommand extends SimplePharaohApp {
                 }
               }
 
-              val ufs3 = PutCommand.writableUfs3(config)
-              if (!PutCommand._ufs3ExistedKey(config, key, ufs3)) {
-                PutCommand._ufs3IsWriting(config, ufs3) match {
-                  case Left(error) ⇒
-                    Future.successful[HttpResponse](
-                      HttpResponse(status = StatusCodes.TooManyRequests, entity = error)
-                    )
-                  case Right(_) ⇒ putFile()
-                }
-              } else
-                Future.successful[HttpResponse](
-                  HttpResponse(status = StatusCodes.Conflict, entity = s"$key has existed")
-                )
+              PutCommand.writableUfs3(config) match {
+                case Right(ufs3) ⇒
+                  PutCommand._ufs3ExistedKey(config, key, ufs3) match {
+                    case Right(true) ⇒
+                      Future.successful[HttpResponse](
+                        HttpResponse(status = StatusCodes.Conflict, entity = s"$key has existed")
+                      )
+                    case Right(false) ⇒
+                      PutCommand._ufs3IsWriting(config, ufs3) match {
+                        case Left(error) ⇒
+                          PutLogger.logger.error("checking is writing", error)
+                          Future.successful[HttpResponse](
+                            HttpResponse(status = StatusCodes.TooManyRequests, entity = error.getMessage)
+                          )
+                        case Right(_) ⇒ putFile()
+                      }
+                    case Left(t) ⇒
+                      PutLogger.logger.error(s"check existed key=$key failed", t)
+                      Future.successful[HttpResponse](
+                        HttpResponse(status = StatusCodes.InternalServerError, entity = s"${t.getMessage}")
+                      )
+                  }
+                case Left(t) ⇒
+                  PutLogger.logger.error("try to get writable ufs3 failed", t)
+                  Future.successful[HttpResponse](
+                    HttpResponse(status = StatusCodes.InternalServerError, entity = s"${t.getMessage}")
+                  )
+              }
+
             }
         }
       }

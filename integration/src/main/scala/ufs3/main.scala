@@ -57,12 +57,12 @@ object Main {
         initLog4j(x.logLevel)
         log.info("It will take a long time to init a ufs3 block file, please wait with your patience!")
         InitCommand.run(x.coreConfig) match {
-          case Success(_) ⇒
+          case Right(_) ⇒
             log.info(
               s"Congratulations! the block file is created, see ${x.coreConfig.fillerBlockPath.file.value.getAbsolutePath}")
             log.info(
               "Now, Give more patience, wait the OS refresh the buffer to the disk, until this process exist, PLEASE DON'T send kill signal to this process")
-          case Failure(t) ⇒
+          case Left(t) ⇒
             log.debug(s"ufs3 init failed", t)
             log.error(t.getMessage)
         }
@@ -72,10 +72,10 @@ object Main {
         log.info(s"putting file:${x.putLocalFile}")
         val now = System.currentTimeMillis()
         PutCommand.writeLocalFile(x.coreConfig, x.putLocalFile, x.putKey) match {
-          case Success((key, uuid)) ⇒
+          case Right((key, uuid)) ⇒
             log.info(
               s"put file:${x.putLocalFile}, the key in ufs3 is $key, uuid in ufs3 is $uuid, time spent: ${System.currentTimeMillis() - now}ms")
-          case Failure(t) ⇒
+          case Left(t) ⇒
             log.debug(s"put file:${x.putLocalFile} failed", t)
             log.error(t.getMessage)
         }
@@ -85,9 +85,9 @@ object Main {
         log.info(s"getting file of key: ${x.getKey}")
         val now = System.currentTimeMillis()
         GetCommand.getToLocalFileWithKey(x.coreConfig, x.getKey, x.getLocalFile) match {
-          case Success(key) ⇒
+          case Right(key) ⇒
             log.info(s"saved file to ${x.getLocalFile}, time spent: ${System.currentTimeMillis() - now}ms")
-          case Failure(t) ⇒
+          case Left(t) ⇒
             log.debug(s"get file:${x.putLocalFile} failed", t)
             log.error(t.getMessage)
         }
@@ -95,8 +95,8 @@ object Main {
       case Some(x) if x.cmd == "list" ⇒
         initLog4j(x.logLevel)
         ListCommand.run(x.coreConfig, x.listLimit, x.listOrder) match {
-          case Success(_) ⇒
-          case Failure(t) ⇒
+          case Right(_) ⇒
+          case Left(t) ⇒
             log.debug(s"list file failed", t)
             log.error(t.getMessage)
         }
@@ -104,8 +104,8 @@ object Main {
       case Some(x) if x.cmd == "free-block" ⇒
         initLog4j(x.logLevel)
         FreeCommand.runFreeSpaceOfFillerProg(x.coreConfig, x.freeSpaceUnit) match {
-          case Success(_) ⇒
-          case Failure(t) ⇒
+          case Right(_) ⇒
+          case Left(t) ⇒
             log.debug(s"calculate free space for block failed", t)
             log.error(t.getMessage)
         }
@@ -113,8 +113,8 @@ object Main {
       case Some(x) if x.cmd == "free-idx" ⇒
         initLog4j(x.logLevel)
         FreeCommand.runFreeSpaceOfFildexProg(x.coreConfig, x.freeSpaceUnit) match {
-          case Success(_) ⇒
-          case Failure(t) ⇒
+          case Right(_) ⇒
+          case Left(t) ⇒
             log.debug(s"calculate free space for index failed", t)
             log.error(t.getMessage)
         }
@@ -122,8 +122,8 @@ object Main {
       case Some(x) if x.cmd == "repair" ⇒
         initLog4j(x.logLevel)
         RepairCommand.run(x.coreConfig) match {
-          case Success(_) ⇒
-          case Failure(t) ⇒
+          case Right(_) ⇒
+          case Left(t) ⇒
             log.debug(s"repair index file failed", t)
             log.error(t.getMessage)
         }

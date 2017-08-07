@@ -52,8 +52,8 @@ trait BackupCommand {
       case (connector, _) ⇒
         // query idx of the key, write tcp head
         val f = Future.successful {
-          GetCommand._idxOfKey(coreConfig, key).map {
-            case Some(idx) ⇒
+          GetCommand._idxOfKey(coreConfig, key) match {
+            case Right(Some(idx)) ⇒
               // 1. Magic: "SAND"
               // 2. BODY_LENGTH, 8 (3#32 + 4#bodylength)
               // 3. KEY, 32
@@ -91,7 +91,8 @@ trait BackupCommand {
               }
               GetCommand._runWithKey(coreConfig, key, out)
               out.close()
-            case None ⇒ Future.failed(new Exception(s"$key not found in ufs3"))
+            case Right(None) ⇒ Future.failed(new Exception(s"$key not found in ufs3"))
+            case Left(t) ⇒ Future.failed(t)
           }
           ()
         }

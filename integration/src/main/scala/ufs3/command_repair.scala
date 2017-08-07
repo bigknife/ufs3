@@ -33,9 +33,8 @@ trait RepairCommand {
   private val repairIntepreter: NT[RepairApp, Kleisli[IO, UniConfig, ?]] =
     fildexInterperter or (logInterperter or (blockInterperter or fillerInterperter))
 
-  def run(config: CoreConfig): Try[Unit] = Try {
+  def run(config: CoreConfig): Resp[Unit] =
     repairFildex[RepairApp].run(config).foldMap(repairIntepreter).run(UniConfig()).unsafeRunSync()
-  }
 
 }
 object RepairCommand extends RepairCommand

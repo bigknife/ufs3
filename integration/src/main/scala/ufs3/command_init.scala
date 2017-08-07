@@ -28,19 +28,17 @@ trait InitCommand {
   type App2[A]       = Coproduct[Log.Op, App1, A]
   type StartupApp[A] = Coproduct[Fildex.Op, App2, A]
 
-  private def initProg(coreConfig: CoreConfig): SOP[StartupApp, Unit] = create[StartupApp].run(coreConfig)
+  private def initProg(coreConfig: CoreConfig): RespSOP[StartupApp, Unit] = create[StartupApp].run(coreConfig)
 
-  private def initInterpreter(): NT[StartupApp, Kleisli[IO, UniConfig, ?]]= {
+  private def initInterpreter(): NT[StartupApp, Kleisli[IO, UniConfig, ?]] = {
     fildexInterperter or (logInterperter or (blockInterperter or fillerInterperter))
   }
 
-  def run(coreConfig: CoreConfig): Try[Unit] = {
-    val prog = initProg(coreConfig)
+  def run(coreConfig: CoreConfig): Resp[Unit] = {
+    val prog        = initProg(coreConfig)
     val interpreter = initInterpreter()
-    val k = prog.foldMap(interpreter)
-    Try{
-      k.run(UniConfig()).unsafeRunSync()
-    }
+    val k           = prog.foldMap(interpreter)
+    k.run(UniConfig()).unsafeRunSync()
   }
 }
 object InitCommand extends InitCommand
