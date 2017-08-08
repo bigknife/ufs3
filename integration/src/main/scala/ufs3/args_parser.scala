@@ -22,8 +22,8 @@ package object parser {
       cmd: String = "",
       blockSize: String = "",
       idxSize: String = "",
-      file: String = "./ufs3.filler",
-      readBufferSize: String = "4M",
+      file: String = "/Users/songwenchao/ufs3.filler",
+      readBufferSize: String = "4K",
       logLevel: String = "info",
       putLocalFile: File = null,
       getLocalFile: File = null,
@@ -31,15 +31,18 @@ package object parser {
       listLimit: Int = -1,
       listOrder: String = "desc",
       freeSpaceUnit: String = "M",
+      putKey: Option[String] = None,
       serveHost: String = "0.0.0.0",
       servePort: Int = 3080,
-      putKey: Option[String] = None,
       backupTarget: Option[String] = None, // Some("localhost:8080")
       serveMode: String = "read-only", // or read-write
+      collieUsed: Boolean = false,
+      app: String = "", //appId,accessId,accessKey
+      collieServer: String = "", //protocol://host:port/root
+      configParam: String = "", //env:creator:5000:10000
       backupServerHost: String = "0.0.0.0",
       backupServerPort: Int = 3081,
       backupKey: String = ""
-
   ) {
     def coreConfig: CoreConfig = new CoreConfig {
       import ufs3.kernel.block.Block.Size._
@@ -209,7 +212,7 @@ package object parser {
       )
 
     cmd("http-server")
-      .text("http-serve: start a http server to expose get/put interface")
+      .text("http-server: start a http server to expose get/put interface")
       .action((_, c) ⇒ c.copy(cmd = "http-server"))
       .children(
         opt[Unit]("read-write")
@@ -225,9 +228,18 @@ package object parser {
           .text("the port to be listened")
           .action((s, c) ⇒ c.copy(servePort = s)),
         opt[String]("backup-target")
-            .text("the backup server address, like localhost:3081")
-            .abbr("bt")
-            .action((s, c) ⇒ c.copy(backupTarget = Some(s))),
+          .text("the backup server address, like localhost:3081")
+          .abbr("bt")
+          .action((s, c) ⇒ c.copy(backupTarget = Some(s))),
+        opt[String]("app")
+          .text("the app  of ufs3 , format as appId,accessId,accessKey")
+          .action((s, c) ⇒ c.copy(app = s)),
+        opt[String]("collie-server")
+          .text("the url of collie server, format as protocol://host:port/root")
+          .action((s, c) ⇒ c.copy(collieServer = s, collieUsed = true)),
+        opt[String]("config-param")
+          .text("the config param of config kit, format as env:creator:timeout:interval , timeout and interval must be number")
+          .action((s, c) ⇒ c.copy(configParam = s)),
         fillerFileOpt("file", "f"),
         logOpt
       )
@@ -251,14 +263,14 @@ package object parser {
       .action((_, c) ⇒ c.copy(cmd = "backup"))
       .children(
         opt[String]("target")
-            .required()
+          .required()
           .abbr("t")
           .text("target socket address of the UFS3 backup server, eg: localhost:3081")
           .action((s, c) ⇒ c.copy(backupTarget = Some(s))),
         opt[String]("key")
-            .abbr("k")
-            .text("the file key to be backuped")
-            .action((s, c) ⇒ c.copy(backupKey = s)),
+          .abbr("k")
+          .text("the file key to be backuped")
+          .action((s, c) ⇒ c.copy(backupKey = s)),
         fillerFileOpt("file", "f"),
         logOpt
       )
