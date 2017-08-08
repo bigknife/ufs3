@@ -12,6 +12,7 @@ package actor
 
 import java.io.{InputStream, PipedInputStream, PipedOutputStream}
 import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 import akka.actor.{Actor, ActorContext, ActorRef, ActorSystem, Props}
@@ -40,15 +41,18 @@ trait UploadProxyActor extends Actor {
   import PutActor._
   implicit val timeout = Timeout(30.minute)
 
+  implicit val materializer = ActorMaterializer()
+
   val coreConfig: CoreConfig
   val backupTarget: Option[InetSocketAddress]
 
   def receive: Receive = {
     case UploadProxyActor.Events.UploadRequest(key, source) ⇒
-      val in  = new PipedInputStream(4 * 1024 * 1024)
-      val out = new PipedOutputStream()
+//      val in  = new PipedInputStream(4 * 1024 * 1024)
+//      val out = new PipedOutputStream()
       // ask Pipeline actor to handle source → out → in
-      pipelineStreamActor.ask(PipeLineStreamActor.Events.PipeLineStream(in, out, source))
+//      pipelineStreamActor.ask(PipeLineStreamActor.Events.PipeLineStream(in, out, source))
+      val in = source.runWith(StreamConverters.asInputStream(readTimeout = Duration(10, TimeUnit.MINUTES)))
       // ask Put actor to put in → ufs3
       val f2 = putActorRef(coreConfig, backupTarget).ask(PutActor.Events.Put(key, in))
       import context.dispatcher
@@ -59,12 +63,12 @@ trait UploadProxyActor extends Actor {
         case Success(x) ⇒
           _sender ! x
           in.close()
-          out.close()
+//          out.close()
 
         case Failure(t) ⇒
           _sender ! Some(t)
           in.close()
-          out.close()
+//          out.close()
       }
 
   }
@@ -189,7 +193,8 @@ object PutActor {
     final case class Put(key: String, ins: InputStream)
   }
 
-  val backupThreadHolder: AtomicReference[Option[BackupSingleThread]] = new AtomicReference[Option[BackupSingleThread]](None)
+  val backupThreadHolder: AtomicReference[Option[BackupSingleThread]] =
+    new AtomicReference[Option[BackupSingleThread]](None)
   val ufs3Holder: AtomicReference[Option[UFS3]] = new AtomicReference[Option[data.Data.UFS3]](None)
 
   def props(_coreConfig: CoreConfig, _backupTarget: Option[InetSocketAddress]): Props =
