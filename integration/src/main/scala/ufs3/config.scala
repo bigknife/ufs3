@@ -29,5 +29,5 @@ trait UniConfig {
 }
 
 object UniConfig {
-  def apply(): UniConfig = new UniConfig(){}
+  def apply(): UniConfig = new UniConfig() {}
 }

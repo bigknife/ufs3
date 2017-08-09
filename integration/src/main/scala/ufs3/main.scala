@@ -10,10 +10,10 @@ package integration
 
 import java.net.InetSocketAddress
 
-import akka.util.Timeout
-import command._
 import org.apache.log4j.{ConsoleAppender, Level, Logger, PatternLayout}
-import main.parser._
+import ufs3.core.data.Data.CoreConfig
+import ufs3.integration.command._
+import ufs3.integration.main.parser._
 
 import scala.concurrent.Await
 import scala.util.{Failure, Success}
@@ -129,14 +129,18 @@ object Main {
         }
 
       case Some(x) if x.cmd == "http-server" ⇒
+        def config: CoreConfig =
+          if (x.collieUsed) {
+            val serverConfig = new ServerConfig(x)
+            serverConfig.coreConfig
+          } else x.coreConfig
         initLog4j(x.logLevel)
         log.info(s"start http server:${x.serveHost}:${x.servePort}, ${x.serveMode}")
-        val backupTarget = x.backupTarget.map {
-          str ⇒
-            val s: Array[String] = str.split(":")
-            new InetSocketAddress(s(0), s(1).toInt)
+        val backupTarget = x.backupTarget.map { str ⇒
+          val s: Array[String] = str.split(":")
+          new InetSocketAddress(s(0), s(1).toInt)
         }
-        ServeCommand.run(x.coreConfig, x.serveHost, x.servePort, x.serveMode, backupTarget)
+        ServeCommand.run(config, x.serveHost, x.servePort, x.serveMode, backupTarget)
 
       case Some(x) if x.cmd == "backup-server" ⇒
         initLog4j(x.logLevel)
@@ -150,19 +154,18 @@ object Main {
         initLog4j(x.logLevel)
         log.info(s"backuping file identified by ${x.backupKey}")
         val s: Array[String] = x.backupTarget.get.split(":")
-        val target = new InetSocketAddress(s(0), s(1).toInt)
+        val target           = new InetSocketAddress(s(0), s(1).toInt)
         import scala.concurrent.ExecutionContext.Implicits.global
         val f = BackupCommand.backup(x.coreConfig, x.backupKey, target)
         f onComplete {
-          case Success(true) ⇒ log.info(s"backuped file successfully identified by ${x.backupKey}")
+          case Success(true)  ⇒ log.info(s"backuped file successfully identified by ${x.backupKey}")
           case Success(false) ⇒ log.info(s"backuped file failed identified by ${x.backupKey}")
-          case Failure(t) ⇒ log.error("backup with exception", t)
+          case Failure(t)     ⇒ log.error("backup with exception", t)
         }
         // timeout
         import scala.concurrent.duration._
         Await.result(f, 600.second)
         ()
-
 
       case Some(_) ⇒ System.err.println("please re-run ufs with --help or -h: ufs3 --help")
       case _       ⇒ //println("please run with help command: ufs3 help")

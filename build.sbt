@@ -59,6 +59,7 @@ lazy val integration = (project in file("integration"))
   .settings(commonSettings: _*)
   .settings(
     libraryDependencies += "com.github.scopt" %% "scopt" % "3.6.0",
+    libraryDependencies += "collie" %% "client" % "0.1.5",
     assemblyOption in assembly := (assemblyOption in assembly).value
       .copy(prependShellScript = Some(defaultShellScript)),
     mainClass in assembly := Some("ufs3.integration.Main"),
