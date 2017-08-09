@@ -22,7 +22,7 @@ package object parser {
       cmd: String = "",
       blockSize: String = "",
       idxSize: String = "",
-      file: String = "/Users/songwenchao/ufs3.filler",
+      file: String = "./ufs3.filler",
       readBufferSize: String = "4K",
       logLevel: String = "info",
       putLocalFile: File = null,
