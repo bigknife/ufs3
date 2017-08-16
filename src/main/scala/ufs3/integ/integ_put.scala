@@ -25,18 +25,15 @@ object put {
 
   def apply(config: Config, key: String, in: InputStream): Task[Unit] = {
     //ufs3.prog.create[App.Op].interpret[Stack].run(config)
-    println(s"start: ${System.currentTimeMillis()}")
     val p: FreeS[App.Op, Unit] = for {
       ufs3 ← open[App.Op](FileMode.ReadWrite)
       _    ← write[App.Op](key, in, ufs3)
     } yield ()
-    println(s"create p: ${System.currentTimeMillis()}")
-    val ops = new FreeSOps[App.Op, Unit](p)
-    println(s"create ops: ${System.currentTimeMillis()}")
-    val f = ops.interpret[Stack]
-    println(s"interpret: ${System.currentTimeMillis()}")
+
+    val start = System.currentTimeMillis()
+    val f = p.interpret[Stack]
+    println(s"interpret: ${System.currentTimeMillis() - start} ms")
     val s = f.run(config)
-    println(s"run: ${System.currentTimeMillis()}")
     s
   }
 }
