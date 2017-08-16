@@ -1,10 +1,8 @@
 package ufs3.interp
 
-
-
 object commons {
-  import cats.data.Kleisli
   import _root_.fs2.Task
+  import cats.data.Kleisli
   import ufs3.kernel.commons.Config
 
   type Stack[A] = Kleisli[Task, Config, A]

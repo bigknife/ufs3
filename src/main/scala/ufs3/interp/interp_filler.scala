@@ -1,14 +1,16 @@
 package ufs3.interp
+import java.util.concurrent.atomic.AtomicInteger
+
+import ufs3.interp.block.{BlockFileBasedFile, RandomAccessBlockFile}
 import ufs3.kernel.algebras.Filler
 import ufs3.kernel.commons._
-import java.util.concurrent.atomic.AtomicInteger
+
 import scala.language.implicitConversions
-import ufs3.interp.block.{BlockFileBasedFile, RandomAccessBlockFile}
 
 object filler {
 
-  import commons._
   import RandomAccessBlockFile._
+  import commons._
 
   val atomWriting = new AtomicInteger(0)
 

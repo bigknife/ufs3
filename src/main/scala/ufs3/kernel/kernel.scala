@@ -1,11 +1,12 @@
 package ufs3.kernel
 import java.io.File
+import java.io.InputStream
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicReference
 
 import cats.Eval
 import freestyle._
 import ufs3.kernel
-import cats.implicits._
 
 import scala.language.implicitConversions
 
@@ -53,19 +54,22 @@ object algebras {
   }
 
   // SandwichIn
-  /*
-  @free trait SandwichIn[In] {
+  @free trait Sandwich {
     def head(key: String, uuid: String, bodyLength: Long): FS[ByteBuffer]
-    def nextBody(in: In): FS[Option[ByteBuffer]]
     def tail(hash: Array[Byte], bodyLength: Long): FS[ByteBuffer]
+    def headSize(): FS[Long]
+    def tailSize(): FS[Long]
   }
-   */
+
+  // streaming
+  @free trait ByteBufferStream {
+    def read(in: InputStream): FS[Option[ByteBuffer]]
+  }
 
   // Sandwich Out
   /*
   @free trait SandwichOut[Out] {
-    def headSize(): FS[Long]
-    def tailSize(): FS[Long]
+
     def outputHead(bb: ByteBuffer, out: Out): FS[Unit]
     def outputBody(bb: ByteBuffer, out: Out): FS[Unit]
     def outputTail(bb: ByteBuffer, out: Out): FS[Unit]
@@ -80,6 +84,10 @@ object commons {
     val indexPath: Eval[Path] = file.map((f: File) ⇒ Path(f.getAbsolutePath + ".idx"))
   }
 
+  object Path {
+    val empty: Path = Path("")
+  }
+
   // XFS-friendly big size file
   private[ufs3] trait BlockFile
   // Filler File
@@ -88,10 +96,10 @@ object commons {
   private[ufs3] trait FildexFile
   // Config
   case class Config(
-      fillerBlockPath: Path,
-      fillerBlockSize: Size,
-      idxBlockSize: Size,
-      fillerReadBufferSize: Size
+      fillerBlockPath: Path = Path.empty,
+      fillerBlockSize: Size = Size.empty,
+      idxBlockSize: Size = Size.empty,
+      fillerReadBufferSize: Size = Size.empty
   )
 
   // Order
@@ -160,6 +168,9 @@ object commons {
 
   // size
   object Size {
+    val empty = new Size {
+      def sizeInByte: Long = 0
+    }
     sealed trait ToLong[A] {
       def toLong(a: A): Long
     }
@@ -501,4 +512,21 @@ object commons {
       byteArray
     }
   }
+
+  // UFS3 trait
+  trait UFS3 {
+    def blockFile: AtomicReference[BlockFile]
+    def fillerFile: AtomicReference[FillerFile]
+    def fildexFile: AtomicReference[FildexFile]
+  }
+
+  object UFS3 {
+    private[ufs3] def apply(_blockFile: BlockFile, _fillerFile: FillerFile, _fildexFile: FildexFile): UFS3 = new UFS3 {
+      val fildexFile: AtomicReference[FildexFile] = new AtomicReference[FildexFile](_fildexFile)
+      val fillerFile: AtomicReference[FillerFile] = new AtomicReference[FillerFile](_fillerFile)
+      val blockFile: AtomicReference[BlockFile]   = new AtomicReference[BlockFile](_blockFile)
+    }
+  }
+
+  val EmptyUUID: String = "                                " //32 space string
 }

@@ -1,18 +1,20 @@
 package ufs3.interp
 import java.io.File
 import java.nio.ByteBuffer
-
-import ufs3.kernel.algebras.Block
-import ufs3.kernel.commons._
-import cats.Eval
 import java.nio.channels.{FileChannel, FileLock}
 import java.util.concurrent.ConcurrentHashMap
+
+import cats.Eval
+import ufs3.kernel.algebras.Block
+import ufs3.kernel.commons._
+
 import scala.language.implicitConversions
 
 object block {
-  import commons._
   import java.io.RandomAccessFile
+
   import RandomAccessBlockFile._
+  import commons._
 
   implicit val blockInterp: Block.Handler[Stack] = new Block.Handler[Stack] {
 

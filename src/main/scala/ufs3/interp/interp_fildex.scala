@@ -2,14 +2,13 @@ package ufs3.interp
 
 import java.nio.ByteBuffer
 
+import ufs3.interp.block.{BlockFileBasedFile, RandomAccessBlockFile}
+import ufs3.interp.block.RandomAccessBlockFile._
+import ufs3.interp.filler.RandomFillerFile
 import ufs3.kernel.commons._
 
 import scala.annotation.tailrec
 import scala.language.implicitConversions
-import ufs3.interp.block.RandomAccessBlockFile
-import ufs3.interp.block.BlockFileBasedFile
-import ufs3.interp.block.RandomAccessBlockFile._
-import ufs3.interp.filler.RandomFillerFile
 
 object fildex {
   import commons._
@@ -24,8 +23,8 @@ object fildex {
 
     protected[this] def check(bf: BlockFile, ff: FillerFile): Stack[Boolean] =
       Stack.configless[Boolean] {
-        import ufs3.interp.filler.RandomFillerFile._
         import RandomAccessBlockFile._
+        import ufs3.interp.filler.RandomFillerFile._
         val rabf: RandomAccessBlockFile = bf
         var rff: RandomFillerFile = ff
 
