@@ -23,7 +23,10 @@ object byteBufferStream {
       }).get
 
       in.read(buffer) match {
-        case -1 ⇒ None
+        case -1 ⇒
+          //clean the cache
+          bufferMap.set(bufferMap.get() - in)
+          None
         case x  ⇒ Some(ByteBuffer.wrap(buffer, 0, x))
       }
     }

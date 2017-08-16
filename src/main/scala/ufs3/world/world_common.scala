@@ -1,5 +1,7 @@
 package ufs3.world
 
+import java.io.File
+
 import ufs3.kernel.commons.{Config, Path, Size}
 
 object commons {
@@ -19,15 +21,29 @@ object commons {
 
     def asConfig: Config = Config(Path(file), str2Size(blockSize), str2Size(idxSize), str2Size(readBuffferSize))
   }
+
+  case class PutArg(
+      file: String = "./ufs3.filler",
+      localFile: Option[File] = None,
+      key: Option[String] = None,
+      bufferSize: Option[Int] = Some(8192)
+  ) {
+    import Size._
+    def asConfig: Config =
+      Config(fillerBlockPath = Path(file), fillerReadBufferSize = bufferSize.map(_.B).getOrElse(8.KiB))
+  }
+
   case class Args(
       cmd: Option[Command] = None,
       logLevel: LogLevel = LogLevel.INFO,
-      createArg: Option[CreateArg] = None
+      createArg: Option[CreateArg] = None,
+      putArg: Option[PutArg] = None
   )
 
   sealed trait Command
   object Command {
     final case object Create extends Command
+    final case object Put    extends Command
   }
 
   sealed trait LogLevel

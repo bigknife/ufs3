@@ -1,8 +1,12 @@
+import sbtassembly.AssemblyPlugin._
+import sbtassembly.AssemblyPlugin.autoImport._
+
 scalaVersion in ThisBuild := "2.12.2"
 scalacOptions in ThisBuild ++= Seq(
   "-language:_",
   "-Ypartial-unification",
-  "-Xfatal-warnings"
+  "-feature"//,
+  //"-Xfatal-warnings"
 )
 scalacOptions in (Compile, console) ~= (_ filterNot (_ contains "paradise"))
 
@@ -52,6 +56,19 @@ val commonSettings = Seq(
   resolvers += Resolver.sonatypeRepo("releases")
 )
 
+// assembly settings
+val assemblySettings = Seq(
+  test in assembly := {},
+  assemblyOption in assembly := (assemblyOption in assembly).value
+    .copy(prependShellScript = Some(defaultShellScript)),
+  mainClass in assembly := Some("ufs3.world.Entrance"),
+  assemblyJarName := s"ufs3",
+  assemblyMergeStrategy in assembly := {
+    case PathList("META-INF", xs @_*) => MergeStrategy.discard
+    //case PathList("scala", xs@_*) ⇒ MergeStrategy.discard
+    case x ⇒ MergeStrategy.first
+  }
+)
 
 lazy val ufs3 = (project in file("."))
   .settings(commonSettings: _*)
@@ -63,3 +80,4 @@ lazy val ufs3 = (project in file("."))
     libraryDependencies ++= miscDependencies,
     compilerPlugins.flatMap(addCompilerPlugin)
   )
+  .settings(assemblySettings: _*)

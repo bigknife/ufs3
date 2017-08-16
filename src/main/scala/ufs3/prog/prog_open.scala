@@ -14,7 +14,7 @@ object open {
       fildexBlockFile ← app.store.block.open(fillerFilePath.indexPath.value, mode)
       fillerFile      ← app.store.filler.check(fillerBlockFile)
       idxOk           ← app.store.fildex.check(fildexBlockFile, fillerFile)
-      _               ← app.errorM.either(Either.cond(!idxOk, (), new IllegalStateException("the idx need to be repaired")))
+      _               ← app.errorM.either(Either.cond(idxOk, (), new IllegalStateException("the idx need to be repaired")))
       fildexFile      ← app.store.fildex.load(fildexBlockFile)
       locked          ← if (mode == FileMode.ReadWrite) app.store.block.lock(fillerBlockFile): FreeS[F, Boolean] else FreeS.pure[F, Boolean](true)
       _               ← app.errorM.either(Either.cond(locked, (), new IllegalStateException("filler file can't be locked")))

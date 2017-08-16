@@ -1,4 +1,6 @@
 package ufs3.world.args
+import java.io.File
+
 import scopt._
 import ufs3.world.commons.Command._
 import ufs3.world.commons._
@@ -37,6 +39,7 @@ object parser extends OptionParser[Args]("ufs3") {
 
   help("help").abbr("h").text("prints this usage text")
 
+  // Command.Create
   cmd("create")
     .action((_, c) ⇒ c.copy(cmd = Some(Create), createArg = Some(CreateArg())))
     .text("create: create a block file for ufs3")
@@ -54,6 +57,26 @@ object parser extends OptionParser[Args]("ufs3") {
         .text("the block index file size, should end with G, M, K as the unit")
         .validate(validSize)
         .action((s, c) ⇒ c.copy(createArg = c.createArg.map(_.copy(idxSize = s)))),
+      logOpt
+    )
+
+  // Command.Put
+  cmd("put")
+    .action((_, c) ⇒ c.copy(cmd = Some(Put), putArg = Some(PutArg())))
+    .text("put: put a local file or some remote resource identified by url into the ufs3")
+    .children(
+      opt[File]("file")
+        .required()
+        .abbr("f")
+        .text("local file path, should be a valid local file")
+        .validate(x ⇒ if (x.exists() && x.isFile) Right(()) else Left(s"not a file: $x"))
+        .action((f, c) ⇒ c.copy(putArg = c.putArg.map(_.copy(localFile = Some(f))))),
+      opt[String]("key")
+        .abbr("k")
+        .text("set the key of the file in the ufs3, the key should be 32 length")
+        .validate(x ⇒ if (x.length != 32) Left("key should be 32 length") else Right())
+        .action((k, c) ⇒ c.copy(putArg = c.putArg.map(_.copy(key = Some(k))))),
+      fillerFileOpt("into", "in")((s, c) ⇒ c.copy(putArg = c.putArg.map(_.copy(file = s)))),
       logOpt
     )
 }

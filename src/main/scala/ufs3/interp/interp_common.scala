@@ -12,9 +12,8 @@ object commons {
       Task.now(f(config))
     }
     def configless[A](f: ⇒ A): Stack[A] = Kleisli {_ ⇒
-      Task.now(f)
+      //Task.now(f)
+      Task.delay(f)
     }
   }
-
-
 }

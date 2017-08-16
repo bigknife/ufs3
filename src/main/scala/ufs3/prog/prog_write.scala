@@ -30,6 +30,7 @@ object write {
     def writeBody(md5: MessageDigest, pos: Long): FreeS[F, Long] = {
       for {
         obb ← app.byteBufferStream.read(in)
+        _ ← app.log.debug(s"writed ${obb.map(_.limit).getOrElse(0)} bytes at pos:$pos")
         nextLength ← if (obb.nonEmpty) {
           for {
             _ ← FreeS.pure[F, Unit](md5.update(obb.get))
@@ -48,6 +49,7 @@ object write {
 
       optIdx ← app.store.fildex.fetchKey(key, out.fildexFile.get())
       _      ← app.errorM.either(Either.cond(optIdx.isEmpty, (), new IllegalArgumentException(s"$key has existed in ufs3")))
+      _      ← app.log.info(s"writing file of key: $key")
 
       startPos ← app.store.filler.startAppend(out.fillerFile.get())
       headB0   ← app.sandwich.head(key, EmptyUUID, 0) //length can't be detected, 预先设定为0
@@ -71,6 +73,8 @@ object write {
 
       _ = out.fillerFile.set(newFillerFile)
       _ = out.fildexFile.set(newFildexFile)
+
+      _ ← app.log.info(s"writed file of key: $key, md5 is $md5, from:$startPos, end:$endPos")
     } yield md5
   }
 }

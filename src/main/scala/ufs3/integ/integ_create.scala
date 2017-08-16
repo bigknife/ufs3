@@ -18,6 +18,7 @@ object create {
   import freestyle.fs2.implicits._
   import ufs3.kernel.commons.Config
   import _root_.fs2.Task
+  import ufs3.prog._
 
   def apply(config: Config): Task[Unit] = {
     ufs3.prog.create[App.Op].interpret[Stack].run(config)
