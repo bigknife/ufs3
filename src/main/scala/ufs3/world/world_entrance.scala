@@ -7,6 +7,8 @@ import ufs3.world.args.parser
 import ufs3.world.commons._
 
 object Entrance extends App { self ⇒
+  ufs3.integ.commons.init()
+
   parser.parse(self.args, Args()) match {
     case Some(x) ⇒
       x.cmd match {

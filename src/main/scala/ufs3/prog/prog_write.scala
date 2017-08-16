@@ -27,6 +27,7 @@ object write {
   private[this] def md5hex(md: MessageDigest): String = md.digest().map("%02x".format(_)).mkString("")
 
   def apply[F[_]](key: String, in: InputStream, out: UFS3)(implicit app: App[F]): FreeS[F, String] = {
+    /*
     def writeBody(md5: MessageDigest, pos: Long): FreeS[F, Long] = {
       for {
         obb ← app.byteBufferStream.read(in)
@@ -76,5 +77,9 @@ object write {
 
       _ ← app.log.info(s"writed file of key: $key, md5 is $md5, from:$startPos, end:$endPos")
     } yield md5
+    */
+    FreeS.pure[F, String]("")
   }
+
+
 }

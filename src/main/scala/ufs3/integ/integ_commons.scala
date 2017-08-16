@@ -1,10 +1,6 @@
 package ufs3.integ
 
-import java.io.InputStream
-
-import ufs3.kernel.commons.FileMode
-
-object put {
+object commons {
   import freestyle._
   import freestyle.implicits._
   import freestyle.effects.error.implicits._
@@ -23,18 +19,7 @@ object put {
   import _root_.fs2.Task
   import ufs3.prog._
 
-  def apply(config: Config, key: String, in: InputStream): Task[Unit] = {
-    //ufs3.prog.create[App.Op].interpret[Stack].run(config)
-    val p: FreeS[App.Op, Unit] = for {
-      ufs3 ← open[App.Op](FileMode.ReadWrite)
-      _    ← write[App.Op](key, in, null)
-    } yield ()
-
-
-    val start = System.currentTimeMillis()
-    val f = p.interpret[Stack]
-    println(s"interpret: ${System.currentTimeMillis() - start} ms")
-    val s = f.run(config)
-    s
+  def init(): Unit = {
+    implicitly[FSHandler[App.Op, Stack]]
   }
 }
