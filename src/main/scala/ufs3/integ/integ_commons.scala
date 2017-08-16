@@ -20,6 +20,7 @@ object commons {
   import ufs3.prog._
 
   def init(): Unit = {
+    // pre create handler, it will take a long time
     implicitly[FSHandler[App.Op, Stack]]
   }
 }

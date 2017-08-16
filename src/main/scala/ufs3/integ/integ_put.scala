@@ -24,7 +24,8 @@ object put {
   import ufs3.prog._
 
   def apply(config: Config, key: String, in: InputStream): Task[Unit] = {
-    //ufs3.prog.create[App.Op].interpret[Stack].run(config)
+    ufs3.prog.create[App.Op].interpret[Stack].run(config)
+    /*
     val p: FreeS[App.Op, Unit] = for {
       ufs3 ← open[App.Op](FileMode.ReadWrite)
       _    ← write[App.Op](key, in, null)
@@ -36,5 +37,6 @@ object put {
     println(s"interpret: ${System.currentTimeMillis() - start} ms")
     val s = f.run(config)
     s
+    */
   }
 }
