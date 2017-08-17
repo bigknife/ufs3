@@ -98,4 +98,13 @@ object parser extends OptionParser[Args]("ufs3") {
       fillerFileOpt("out-form", "o")((s, c) ⇒ c.copy(getArg = c.getArg.map(_.copy(file = s)))),
       logOpt
     )
+
+  // Command.List
+  cmd("list")
+    .action((_, c) ⇒ c.copy(cmd = Some(List), listArg = Some(ListArg())))
+    .text("list: list all of the files in ufs3 instance")
+    .children(
+      fillerFileOpt("file", "f")((s, c) ⇒ c.copy(listArg = c.listArg.map(_.copy(file = s)))),
+      logOpt
+    )
 }

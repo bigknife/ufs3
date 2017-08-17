@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory
 import ufs3.integ._
 import ufs3.world.args.parser
 import ufs3.world.commons._
+import ufs3.world.utils.render._
 
 object Entrance extends App { self ⇒
   val log = LoggerFactory.getLogger("entrance")
@@ -48,7 +49,13 @@ object Entrance extends App { self ⇒
                   out.close()
                 }
               }
-
+            case Command.List ⇒
+              for {
+                listArg ← x.listArg
+              } yield {
+                val idxs = list(listArg.asConfig, 0, "asc").unsafeRun()
+                renderIdxs(idxs)(println)
+              }
           }
         case None ⇒
       }
