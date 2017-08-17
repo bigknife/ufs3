@@ -71,7 +71,10 @@ val assemblySettings = Seq(
   mainClass in assembly := Some("ufs3.world.Entrance"),
   assemblyJarName := s"ufs3",
   assemblyMergeStrategy in assembly := {
-    case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+    case PathList("META-INF", "MANIFEST.MF") => MergeStrategy.discard
+    case PathList("META-INF", xs @ _*) => MergeStrategy.concat
+    case PathList("application.conf") ⇒ MergeStrategy.concat
+    case PathList("reference.conf") ⇒ MergeStrategy.concat
     //case PathList("scala", xs@_*) ⇒ MergeStrategy.discard
     case x ⇒ MergeStrategy.first
   }

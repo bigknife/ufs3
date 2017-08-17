@@ -148,4 +148,39 @@ object parser extends OptionParser[Args]("ufs3") {
       fillerFileOpt("file", "f")((s, c) ⇒ c.copy(repairArg = c.repairArg.map(_.copy(file = s)))),
       logOpt
     )
+
+  // Command.HttpServer
+  cmd("http-server")
+    .text("http-server: start a http server to expose get/put interface")
+    .action((_, c) ⇒ c.copy(cmd = Some(HttpServer), httpServerArg = Some(HttpServerArg())))
+    .children(
+      opt[Unit]("read-write")
+        .abbr("rw")
+        .action((_, c) ⇒ c.copy(httpServerArg = c.httpServerArg.map(_.copy(mode = "read-write")))),
+      opt[Unit]("read-only")
+        .abbr("ro")
+        .action((_, c) ⇒ c.copy(httpServerArg = c.httpServerArg.map(_.copy(mode = "read-only")))),
+      opt[String]("host")
+        .text("the host to be listened")
+        .action((s, c) ⇒ c.copy(httpServerArg = c.httpServerArg.map(_.copy(host = s)))),
+      opt[Int]("port")
+        .text("the port to be listened")
+        .action((s, c) ⇒ c.copy(httpServerArg = c.httpServerArg.map(_.copy(port = s)))),
+      opt[String]("backup-target")
+        .text("the backup server address, like localhost:3081")
+        .abbr("bt")
+        .action((s, c) ⇒ c.copy(httpServerArg = c.httpServerArg.map(_.copy(backupServer = Some(s))))),
+      opt[String]("app")
+        .text("the app  of ufs3 , format as appId,accessId,accessKey")
+        .action((s, c) ⇒ c.copy(httpServerArg = c.httpServerArg.map(_.copy(app = Some(s))))),
+      opt[String]("collie-server")
+        .text("the url of collie server, format as protocol://host:port/root")
+        .action((s, c) ⇒ c.copy(httpServerArg = c.httpServerArg.map(_.copy(collieServer = Some(s))))),
+      opt[String]("config-param")
+        .text(
+          "the config param of config kit, format as env:creator:timeout:interval , timeout and interval must be number")
+        .action((s, c) ⇒ c.copy(httpServerArg = c.httpServerArg.map(_.copy(collieClientConfig = Some(s))))),
+      fillerFileOpt("file", "f")((s, c) ⇒ c.copy(httpServerArg = c.httpServerArg.map(_.copy(file = s)))),
+      logOpt
+    )
 }

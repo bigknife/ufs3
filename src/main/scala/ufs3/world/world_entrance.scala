@@ -74,6 +74,12 @@ object Entrance extends App { self ⇒
               } yield {
                 repair(repairArg.asConfig).unsafeRun()
               }
+            case Command.HttpServer ⇒
+              for {
+                httpServerArg ← x.httpServerArg
+              } yield {
+                httpServer(httpServerArg).unsafeRun()
+              }
           }
         case None ⇒
       }

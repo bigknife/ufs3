@@ -39,6 +39,7 @@ object read {
       } yield ()
 
     for {
+      _ ← app.log.info(s"start read $key", None)
       bufferSize ← app.readerM.reader(_.fillerReadBufferSize)
       optIdx     ← app.store.fildex.fetchKey(key, fildexFile)
       _          ← app.errorM.either(Either.cond(optIdx.isDefined, (), KeyNotFoundException(key)))

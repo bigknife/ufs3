@@ -63,6 +63,21 @@ object commons {
       Config(fillerBlockPath = Path(file))
   }
 
+  case class HttpServerArg(
+      file: String = "./ufs3.filler",
+      mode: String = "read-only",
+      host: String = "localhost",
+      port: Int = 3080,
+      backupServer: Option[String] = None,
+      app: Option[String] = None,
+      collieServer: Option[String] = None,
+      collieClientConfig: Option[String] = None,
+      downloadBufferSize: String = "8K"
+  ) {
+    def asConfig: Config =
+      Config(fillerBlockPath = Path(file), fillerReadBufferSize = str2Size(downloadBufferSize))
+  }
+
   case class RepairArg(file: String = "./ufs3.filler", idxSize: Option[String] = None) {
     def asConfig: Config =
       Config(fillerBlockPath = Path(file), idxBlockSize = str2Size(idxSize.get))
@@ -76,7 +91,8 @@ object commons {
       getArg: Option[GetArg] = None,
       listArg: Option[ListArg] = None,
       freeSpaceArg: Option[FreeSpaceArg] = None,
-      repairArg: Option[RepairArg] = None
+      repairArg: Option[RepairArg] = None,
+      httpServerArg: Option[HttpServerArg] = None
   )
 
   sealed trait Command
@@ -88,6 +104,7 @@ object commons {
     final case object FreeFildexSpace extends Command
     final case object FreeFillerSpace extends Command
     final case object Repair          extends Command
+    final case object HttpServer      extends Command
   }
 
   sealed trait LogLevel
