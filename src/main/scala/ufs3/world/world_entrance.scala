@@ -67,6 +67,13 @@ object Entrance extends App { self ⇒
                 val freeSpace = freeSpaceTask.unsafeRun()
                 renderSize(freeSpace, freeSpaceArg.unit)(println)
               }
+
+            case Command.Repair ⇒
+              for {
+                repairArg ← x.repairArg
+              } yield {
+                repair(repairArg.asConfig).unsafeRun()
+              }
           }
         case None ⇒
       }

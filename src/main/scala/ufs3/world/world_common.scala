@@ -5,19 +5,20 @@ import java.io.File
 import ufs3.kernel.commons.{Config, Path, Size}
 
 object commons {
+  private[this] def str2Size(ss: String): Size = {
+    import Size._
+    ss.last match {
+      case 'G' ⇒ ss.substring(0, ss.length - 1).GiB
+      case 'M' ⇒ ss.substring(0, ss.length - 1).MiB
+      case 'K' ⇒ ss.substring(0, ss.length - 1).KiB
+      case _   ⇒ throw new IllegalArgumentException("size should be end with G|M|K")
+    }
+  }
+
   case class CreateArg(file: String = "./ufs3.filler",
                        blockSize: String = "1G",
                        idxSize: String = "10M",
                        readBuffferSize: String = "8K") {
-    private[this] def str2Size(ss: String): Size = {
-      import Size._
-      ss.last match {
-        case 'G' ⇒ ss.substring(0, ss.length - 1).GiB
-        case 'M' ⇒ ss.substring(0, ss.length - 1).MiB
-        case 'K' ⇒ ss.substring(0, ss.length - 1).KiB
-        case _   ⇒ throw new IllegalArgumentException("size should be end with G|M|K")
-      }
-    }
 
     def asConfig: Config = Config(Path(file), str2Size(blockSize), str2Size(idxSize), str2Size(readBuffferSize))
   }
@@ -62,6 +63,11 @@ object commons {
       Config(fillerBlockPath = Path(file))
   }
 
+  case class RepairArg(file: String = "./ufs3.filler", idxSize: Option[String] = None) {
+    def asConfig: Config =
+      Config(fillerBlockPath = Path(file), idxBlockSize = str2Size(idxSize.get))
+  }
+
   case class Args(
       cmd: Option[Command] = None,
       logLevel: LogLevel = LogLevel.INFO,
@@ -69,7 +75,8 @@ object commons {
       putArg: Option[PutArg] = None,
       getArg: Option[GetArg] = None,
       listArg: Option[ListArg] = None,
-      freeSpaceArg: Option[FreeSpaceArg] = None
+      freeSpaceArg: Option[FreeSpaceArg] = None,
+      repairArg: Option[RepairArg] = None
   )
 
   sealed trait Command
@@ -80,6 +87,7 @@ object commons {
     final case object List            extends Command
     final case object FreeFildexSpace extends Command
     final case object FreeFillerSpace extends Command
+    final case object Repair          extends Command
   }
 
   sealed trait LogLevel

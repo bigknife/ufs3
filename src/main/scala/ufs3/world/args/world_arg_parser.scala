@@ -35,7 +35,7 @@ object parser extends OptionParser[Args]("ufs3") {
 
   version("version").abbr("v").text("print version of current ufs3")
 
-  head("ufs3", "0.1.20170815_0001")
+  head("ufs3", "0.1.20170817_0001")
 
   help("help").abbr("h").text("prints this usage text")
 
@@ -132,5 +132,20 @@ object parser extends OptionParser[Args]("ufs3") {
           fillerFileOpt("file", "f")((s, c) ⇒ c.copy(freeSpaceArg = c.freeSpaceArg.map(_.copy(file = s)))),
           logOpt
         )
+    )
+
+  // Command.Repair
+  cmd("repair")
+    .text("repair: repair the index file")
+    .action((_, c) ⇒ c.copy(cmd = Some(Repair), repairArg = Some(RepairArg())))
+    .children(
+      opt[String]("idx-size")
+        .abbr("is")
+        .required()
+        .text("the block index file size, should end with G, M, K as the unit")
+        .validate(validSize)
+        .action((s, c) ⇒ c.copy(repairArg = c.repairArg.map(_.copy(idxSize = Some(s))))),
+      fillerFileOpt("file", "f")((s, c) ⇒ c.copy(repairArg = c.repairArg.map(_.copy(file = s)))),
+      logOpt
     )
 }
