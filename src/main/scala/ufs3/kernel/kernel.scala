@@ -1,6 +1,5 @@
 package ufs3.kernel
-import java.io.File
-import java.io.InputStream
+import java.io.{File, InputStream, OutputStream}
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicReference
 
@@ -64,6 +63,9 @@ object algebras {
   // streaming
   @free trait ByteBufferStream {
     def read(in: InputStream): FS[Option[ByteBuffer]]
+    def writeHead(data: ByteBuffer, out: OutputStream): FS[Unit]
+    def writeBody(data: ByteBuffer, out: OutputStream): FS[Unit]
+    def writeTail(data: ByteBuffer, out: OutputStream): FS[Unit]
   }
 
   // Sandwich Out

@@ -15,15 +15,7 @@ import freestyle.fs2.Eff
 import _root_.fs2.Stream
 
 object write {
-  /*
-  implicit val x = new Suspendable[IO] {
-    def suspend[A](fa: => IO[A]) = IO.suspend(fa)
 
-    def flatMap[A, B](a: IO[A])(f: (A) => IO[B]) = a.flatMap(f)
-
-    def pure[A](a: A) = IO.pure(a)
-  }
-   */
   private[this] def md5hex(md: MessageDigest): String = md.digest().map("%02x".format(_)).mkString("")
 
   def apply[F[_]](key: String, in: InputStream, out: UFS3)(implicit app: App[F]): FreeS[F, String] = {

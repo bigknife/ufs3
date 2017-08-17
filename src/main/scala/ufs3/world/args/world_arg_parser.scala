@@ -79,4 +79,23 @@ object parser extends OptionParser[Args]("ufs3") {
       fillerFileOpt("into", "in")((s, c) ⇒ c.copy(putArg = c.putArg.map(_.copy(file = s)))),
       logOpt
     )
+
+  // Command.Get
+  cmd("get")
+    .action((_, c) ⇒ c.copy(cmd = Some(Get), getArg = Some(GetArg())))
+    .text("get: read file from ufs3 with key, and output to somewhere")
+    .children(
+      opt[String]("key")
+        .abbr("k")
+        .text("the file key in the ufs3")
+        .action((s, c) ⇒ c.copy(getArg = c.getArg.map(_.copy(key = Some(s))))),
+      opt[File]("file")
+        .required()
+        .abbr("f")
+        .text("local file path, should be a valid local file")
+        .validate(x ⇒ if (!x.exists()) Right(()) else Left(s"file $x exists, please use another not existed file path"))
+        .action((f, c) ⇒ c.copy(getArg = c.getArg.map(_.copy(toSaveFile = Some(f))))),
+      fillerFileOpt("out-form", "o")((s, c) ⇒ c.copy(getArg = c.getArg.map(_.copy(file = s)))),
+      logOpt
+    )
 }

@@ -33,17 +33,30 @@ object commons {
       Config(fillerBlockPath = Path(file), fillerReadBufferSize = bufferSize.map(_.B).getOrElse(8.KiB))
   }
 
+  case class GetArg(
+      file: String = "./ufs3.filler",
+      key: Option[String] = None,
+      toSaveFile: Option[File] = None,
+      bufferSize: Option[Int] = Some(8192)
+  ) {
+    import Size._
+    def asConfig: Config =
+      Config(fillerBlockPath = Path(file), fillerReadBufferSize = bufferSize.map(_.B).getOrElse(8.KiB))
+  }
+
   case class Args(
       cmd: Option[Command] = None,
       logLevel: LogLevel = LogLevel.INFO,
       createArg: Option[CreateArg] = None,
-      putArg: Option[PutArg] = None
+      putArg: Option[PutArg] = None,
+      getArg: Option[GetArg] = None
   )
 
   sealed trait Command
   object Command {
     final case object Create extends Command
     final case object Put    extends Command
+    final case object Get    extends Command
   }
 
   sealed trait LogLevel

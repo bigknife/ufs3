@@ -1,6 +1,6 @@
 package ufs3.world
 
-import java.io.{File, FileInputStream}
+import java.io.{File, FileInputStream, FileOutputStream}
 
 import org.slf4j.LoggerFactory
 import ufs3.integ._
@@ -30,11 +30,22 @@ object Entrance extends App { self ⇒
               } yield {
                 val in = new FileInputStream(localFile)
                 try {
-                  val task = put(putArg.asConfig, key, in)
-                  task.unsafeRun()
+                  put(putArg.asConfig, key, in).unsafeRun()
                 } finally {
                   in.close()
-                  println("ok")
+                }
+              }
+            case Command.Get ⇒
+              for {
+                getArg ← x.getArg
+                toSaveFile ← getArg.toSaveFile
+                key ← getArg.key
+              } yield {
+                val out = new FileOutputStream(toSaveFile)
+                try {
+                  get(getArg.asConfig, key, out).unsafeRun()
+                } finally {
+                  out.close()
                 }
               }
 
