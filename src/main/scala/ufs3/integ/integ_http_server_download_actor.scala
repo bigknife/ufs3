@@ -18,7 +18,7 @@ class DownloadActor extends Actor {
   import DownloadLogger.logger._
   def receive: Receive = {
     case DownloadActor.Download(config, key, out, in) ⇒
-      val ufs3 = httpServer.openUFS3(config)
+      val ufs3 = httpServer.openReadWriteUFS3(config)
       val p    = read[App.Op](key, ufs3, out)
 
       Try {
@@ -37,8 +37,6 @@ class DownloadActor extends Actor {
 }
 object DownloadActor {
   def props: Props = Props(classOf[DownloadActor])
-
-
 
   sealed trait Command
   final case class Download(config: Config, key: String, out: OutputStream, in: InputStream) extends Command
