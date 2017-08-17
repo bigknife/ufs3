@@ -3,8 +3,6 @@ package ufs3.kernel
 import freestyle._
 import freestyle.effects.error._
 import freestyle.effects.reader
-import freestyle.fs2.StreamM
-import freestyle.logging.LoggingM
 import ufs3.kernel.algebras._
 import ufs3.kernel.commons.Config
 
@@ -23,8 +21,8 @@ object modules {
 
     val errorM: ErrorM
     val readerM: rd.ReaderM
-    val log: LoggingM
-    //val stream: StreamM
+    val log: Log
+
     val byteBufferStream: ByteBufferStream
   }
 }

@@ -1,6 +1,6 @@
 package ufs3.world
 
-import java.io.{File, FileInputStream, FileOutputStream}
+import java.io.{FileInputStream, FileOutputStream}
 
 import org.slf4j.LoggerFactory
 import ufs3.integ._
@@ -9,11 +9,10 @@ import ufs3.world.commons._
 import ufs3.world.utils.render._
 
 object Entrance extends App { self ⇒
-  val log = LoggerFactory.getLogger("entrance")
 
-  log.info("init ufs3...")
+  //val start = System.currentTimeMillis()
   ufs3.integ.commons.init()
-  log.info("init ufs3 ok.")
+  //println(s"init cost ${System.currentTimeMillis() - start} ms")
 
 
   parser.parse(self.args, Args()) match {
@@ -38,9 +37,9 @@ object Entrance extends App { self ⇒
               }
             case Command.Get ⇒
               for {
-                getArg ← x.getArg
+                getArg     ← x.getArg
                 toSaveFile ← getArg.toSaveFile
-                key ← getArg.key
+                key        ← getArg.key
               } yield {
                 val out = new FileOutputStream(toSaveFile)
                 try {
@@ -56,9 +55,22 @@ object Entrance extends App { self ⇒
                 val idxs = list(listArg.asConfig, 0, "asc").unsafeRun()
                 renderIdxs(idxs)(println)
               }
+            case f if f == Command.FreeFildexSpace || f == Command.FreeFillerSpace ⇒
+              for {
+                freeSpaceArg ← x.freeSpaceArg
+              } yield {
+                val freeSpaceTask = f match {
+                  case Command.FreeFillerSpace ⇒ free.filler(freeSpaceArg.asConfig)
+                  case Command.FreeFildexSpace ⇒ free.fildex(freeSpaceArg.asConfig)
+                  case _                       ⇒ throw new IllegalStateException("not possible")
+                }
+                val freeSpace = freeSpaceTask.unsafeRun()
+                renderSize(freeSpace, freeSpaceArg.unit)(println)
+              }
           }
         case None ⇒
       }
     case _ ⇒
   }
+
 }

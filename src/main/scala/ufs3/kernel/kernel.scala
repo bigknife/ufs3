@@ -8,6 +8,7 @@ import freestyle._
 import ufs3.kernel
 
 import scala.language.implicitConversions
+import scala.language.higherKinds
 
 object algebras {
   import commons._
@@ -52,7 +53,7 @@ object algebras {
     def freeSpace(fdf: FildexFile): FS[Long]
   }
 
-  // SandwichIn
+  // Sandwich
   @free trait Sandwich {
     def head(key: String, uuid: String, bodyLength: Long): FS[ByteBuffer]
     def tail(hash: Array[Byte], bodyLength: Long): FS[ByteBuffer]
@@ -68,15 +69,13 @@ object algebras {
     def writeTail(data: ByteBuffer, out: OutputStream): FS[Unit]
   }
 
-  // Sandwich Out
-  /*
-  @free trait SandwichOut[Out] {
-
-    def outputHead(bb: ByteBuffer, out: Out): FS[Unit]
-    def outputBody(bb: ByteBuffer, out: Out): FS[Unit]
-    def outputTail(bb: ByteBuffer, out: Out): FS[Unit]
+  // log
+  @free trait Log {
+    def error(msg: String, cause: Option[Throwable] = None): FS[Unit]
+    def debug(msg: String, cause: Option[Throwable] = None): FS[Unit]
+    def info(msg: String, cause: Option[Throwable] = None): FS[Unit]
+    def warn(msg: String, cause: Option[Throwable] = None): FS[Unit]
   }
- */
 }
 
 object commons {

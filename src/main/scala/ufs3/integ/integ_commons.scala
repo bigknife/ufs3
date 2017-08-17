@@ -14,8 +14,9 @@ object commons {
   import ufs3.interp.byteBufferStream._
   import ufs3.kernel.modules._
   import ufs3.interp.commons._
+  import ufs3.interp.log._
   import rd.implicits._
-  import freestyle.loggingJVM.implicits._
+
   import freestyle.fs2.implicits._
   import ufs3.kernel.commons.Config
   import _root_.fs2.Task
@@ -24,5 +25,6 @@ object commons {
   def init(): Unit = {
     // pre create handler, it will take a long time
     implicitly[FSHandler[App.Op, Stack]]
+    ()
   }
 }

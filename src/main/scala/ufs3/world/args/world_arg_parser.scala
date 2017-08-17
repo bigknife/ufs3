@@ -74,7 +74,7 @@ object parser extends OptionParser[Args]("ufs3") {
       opt[String]("key")
         .abbr("k")
         .text("set the key of the file in the ufs3, the key should be 32 length")
-        .validate(x ⇒ if (x.length != 32) Left("key should be 32 length") else Right())
+        .validate(x ⇒ if (x.length != 32) Left("key should be 32 length") else Right(()))
         .action((k, c) ⇒ c.copy(putArg = c.putArg.map(_.copy(key = Some(k))))),
       fillerFileOpt("into", "in")((s, c) ⇒ c.copy(putArg = c.putArg.map(_.copy(file = s)))),
       logOpt
@@ -106,5 +106,31 @@ object parser extends OptionParser[Args]("ufs3") {
     .children(
       fillerFileOpt("file", "f")((s, c) ⇒ c.copy(listArg = c.listArg.map(_.copy(file = s)))),
       logOpt
+    )
+
+  // Command.Free***Space
+  cmd("free")
+    .text("free: view the free space")
+    .children(
+      cmd("block")
+        .text("block: view the free space of block")
+        .action((_, c) ⇒ c.copy(cmd = Some(FreeFillerSpace), freeSpaceArg = Some(FreeSpaceArg())))
+        .children(
+          opt[String]("with-unit")
+            .text("the unit for showing free space (G|M|K), default is M")
+            .action((u, c) ⇒ c.copy(freeSpaceArg = c.freeSpaceArg.map(_.copy(unit = u)))),
+          fillerFileOpt("file", "f")((s, c) ⇒ c.copy(freeSpaceArg = c.freeSpaceArg.map(_.copy(file = s)))),
+          logOpt
+        ),
+      cmd("idx")
+        .text("idx: view the free space of index")
+        .action((_, c) ⇒ c.copy(cmd = Some(FreeFildexSpace), freeSpaceArg = Some(FreeSpaceArg())))
+        .children(
+          opt[String]("with-unit")
+            .text("the unit for showing free space (G|M|K), default is M")
+            .action((u, c) ⇒ c.copy(freeSpaceArg = c.freeSpaceArg.map(_.copy(unit = u)))),
+          fillerFileOpt("file", "f")((s, c) ⇒ c.copy(freeSpaceArg = c.freeSpaceArg.map(_.copy(file = s)))),
+          logOpt
+        )
     )
 }

@@ -1,6 +1,6 @@
 package ufs3.world.utils
 
-import ufs3.kernel.commons.Idx
+import ufs3.kernel.commons.{Idx, Size}
 import ufs3.kernel.commons.Size._
 
 object render {
@@ -28,5 +28,10 @@ object render {
 
     val s = rowTuple.map(row).mkString("\r\n")
     renderer(s)
+  }
+
+  def renderSize(l: Long, u: String)(renderer: String ⇒ Unit): Unit = {
+    import Size._
+    renderer(l.B.toStringWithUnit(u))
   }
 }

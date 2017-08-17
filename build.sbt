@@ -1,13 +1,21 @@
 import sbtassembly.AssemblyPlugin._
 import sbtassembly.AssemblyPlugin.autoImport._
 
-scalaVersion in ThisBuild := "2.12.2"
+scalaVersion in ThisBuild := "2.11.8"
 scalacOptions in ThisBuild ++= Seq(
-  "-language:_",
-  "-Ypartial-unification",
-  "-feature"//,
-  //"-Xfatal-warnings"
+  "-target:jvm-1.8",
+  "-encoding",
+  "UTF-8",
+  "-unchecked",
+  "-deprecation",
+  "-Xfuture",
+  "-feature",
+  "-Ywarn-dead-code",
+  "-Ywarn-numeric-widen",
+  "-Ywarn-value-discard",
+  "-Ywarn-unused"
 )
+
 scalacOptions in (Compile, console) ~= (_ filterNot (_ contains "paradise"))
 
 // cats 0.9.0
@@ -19,7 +27,7 @@ val catsDependencies = Seq(
 // compiler plugins
 val compilerPlugins = Seq(
   "org.spire-math" %% "kind-projector" % "0.9.4",
-  "org.scalameta"  % "paradise"        % "3.0.0-M9" cross CrossVersion.patch
+  "org.scalameta"  % "paradise"        % "3.0.0-M7" cross CrossVersion.patch
 )
 
 // freestyle 0.3.1
@@ -27,8 +35,7 @@ val freestyleDependencies = Seq(
   "io.frees" %% "freestyle"         % "0.3.1",
   "io.frees" %% "freestyle-effects" % "0.3.1",
   "io.frees" %% "freestyle-cache"   % "0.3.1",
-  "io.frees" %% "freestyle-fs2"     % "0.3.1",
-  "io.frees" %% "freestyle-logging" % "0.3.1"
+  "io.frees" %% "freestyle-fs2"     % "0.3.1"
 )
 
 // fs2
@@ -64,10 +71,17 @@ val assemblySettings = Seq(
   mainClass in assembly := Some("ufs3.world.Entrance"),
   assemblyJarName := s"ufs3",
   assemblyMergeStrategy in assembly := {
-    case PathList("META-INF", xs @_*) => MergeStrategy.discard
+    case PathList("META-INF", xs @ _*) => MergeStrategy.discard
     //case PathList("scala", xs@_*) ⇒ MergeStrategy.discard
     case x ⇒ MergeStrategy.first
   }
+)
+
+// barcsys settings
+val barcsysSettings = Seq(
+  resolvers += "BarcsysRepo" at "https://repox.barcsys.com/",
+  libraryDependencies += "com.barcsys" %% "barcsys_tcp_connection" % "1.0.11.20170731180222-SNAPSHOT",
+  libraryDependencies += "pharaoh"     %% "pharaoh"                % "0.0.1"
 )
 
 lazy val ufs3 = (project in file("."))
@@ -81,3 +95,4 @@ lazy val ufs3 = (project in file("."))
     compilerPlugins.flatMap(addCompilerPlugin)
   )
   .settings(assemblySettings: _*)
+  .settings(barcsysSettings)

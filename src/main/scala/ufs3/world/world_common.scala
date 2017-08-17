@@ -54,21 +54,32 @@ object commons {
       Config(fillerBlockPath = Path(file), fillerReadBufferSize = bufferSize.map(_.B).getOrElse(8.KiB))
   }
 
+  case class FreeSpaceArg(
+      file: String = "./ufs3.filler",
+      unit: String = "M"
+  ) {
+    def asConfig: Config =
+      Config(fillerBlockPath = Path(file))
+  }
+
   case class Args(
       cmd: Option[Command] = None,
       logLevel: LogLevel = LogLevel.INFO,
       createArg: Option[CreateArg] = None,
       putArg: Option[PutArg] = None,
       getArg: Option[GetArg] = None,
-      listArg: Option[ListArg] = None
+      listArg: Option[ListArg] = None,
+      freeSpaceArg: Option[FreeSpaceArg] = None
   )
 
   sealed trait Command
   object Command {
-    final case object Create extends Command
-    final case object Put    extends Command
-    final case object Get    extends Command
-    final case object List   extends Command
+    final case object Create          extends Command
+    final case object Put             extends Command
+    final case object Get             extends Command
+    final case object List            extends Command
+    final case object FreeFildexSpace extends Command
+    final case object FreeFillerSpace extends Command
   }
 
   sealed trait LogLevel
