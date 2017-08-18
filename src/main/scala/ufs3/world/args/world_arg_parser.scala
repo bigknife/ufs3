@@ -198,4 +198,22 @@ object parser extends OptionParser[Args]("ufs3") {
       fillerFileOpt("file", "f")((s, c) ⇒ c.copy(backupServerArg = c.backupServerArg.map(_.copy(file = s)))),
       logOpt
     )
+
+  // Command.Backup
+  cmd("backup")
+    .text("backup: backup the file identified by key to the target of another UFS3")
+    .action((_, c) ⇒ c.copy(cmd = Some(Backup), backupArg = Some(BackupArg())))
+    .children(
+      opt[String]("target")
+        .required()
+        .abbr("t")
+        .text("target socket address of the UFS3 backup server, eg: localhost:3081")
+        .action((s, c) ⇒ c.copy(backupArg = c.backupArg.map(_.copy(target = Some(s))))),
+      opt[String]("key")
+        .abbr("k")
+        .text("the file key to be backuped")
+        .action((s, c) ⇒ c.copy(backupArg = c.backupArg.map(_.copy(key = Some(s))))),
+      fillerFileOpt("file", "f")((s, c) ⇒ c.copy(backupServerArg = c.backupServerArg.map(_.copy(file = s)))),
+      logOpt
+    )
 }

@@ -93,6 +93,16 @@ object commons {
       Config(fillerBlockPath = Path(file), idxBlockSize = str2Size(idxSize.get))
   }
 
+  case class BackupArg(
+      file: String = "./ufs3.filler",
+      key: Option[String] = None,
+      target: Option[String] = None,
+      bufferSize: String = "8K"
+  ) {
+    def asConfig: Config =
+      Config(fillerBlockPath = Path(file), fillerReadBufferSize = str2Size(bufferSize))
+  }
+
   case class Args(
       cmd: Option[Command] = None,
       logLevel: LogLevel = LogLevel.INFO,
@@ -103,7 +113,8 @@ object commons {
       freeSpaceArg: Option[FreeSpaceArg] = None,
       repairArg: Option[RepairArg] = None,
       httpServerArg: Option[HttpServerArg] = None,
-      backupServerArg: Option[BackupServerArg] = None
+      backupServerArg: Option[BackupServerArg] = None,
+      backupArg: Option[BackupArg] = None
   )
 
   sealed trait Command
@@ -117,6 +128,7 @@ object commons {
     final case object Repair          extends Command
     final case object HttpServer      extends Command
     final case object BackupServer    extends Command
+    final case object Backup          extends Command
   }
 
   sealed trait LogLevel
