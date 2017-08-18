@@ -100,7 +100,7 @@ object commons {
       fillerBlockPath: Path = Path.empty,
       fillerBlockSize: Size = Size.empty,
       idxBlockSize: Size = Size.empty,
-      fillerReadBufferSize: Size = Size.empty
+      fillerReadBufferSize: Size = Size.empty // all kind of buffer size
   )
 
   // Order

@@ -94,7 +94,7 @@ trait BackupSingleThread {
         if (_connector.isDefined) {
           val md5 = MessageDigest.getInstance("md5")
           Try {
-            Stack.parseApp[Option[Idx]](fetchKey[App.Op](event.key, httpServer.openReadonlyUFS3(coreConfig))).run(coreConfig).unsafeRun()
+            Stack.parseApp[Option[Idx]](fetchKey[App.Op](event.key, httpServer.openReadWriteUFS3(coreConfig))).run(coreConfig).unsafeRun()
           } match {
             case Success(Some(idx)) ⇒
               // 1. Magic: "SAND"
@@ -136,7 +136,8 @@ trait BackupSingleThread {
                 }
               }
               Try {
-                Stack.parseApp(read[App.Op](event.key, httpServer.openReadonlyUFS3(coreConfig), out)).run(coreConfig).unsafeRun()
+                // 此处应该用读写的ufs，因为在写入的时候用的是这个
+                Stack.parseApp(read[App.Op](event.key, httpServer.openReadWriteUFS3(coreConfig), out)).run(coreConfig).unsafeRun()
               } match {
                 case Success(_) ⇒
                   logger.info(s"backup successfully for ${event.key}")

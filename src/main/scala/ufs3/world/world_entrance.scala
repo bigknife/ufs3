@@ -80,6 +80,12 @@ object Entrance extends App { self ⇒
               } yield {
                 httpServer(httpServerArg).unsafeRun()
               }
+            case Command.BackupServer ⇒
+              for {
+                backupServerArg ← x.backupServerArg
+              } yield {
+                backupServer(backupServerArg).unsafeRun()
+              }
           }
         case None ⇒
       }

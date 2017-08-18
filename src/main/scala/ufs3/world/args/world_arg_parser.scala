@@ -183,4 +183,19 @@ object parser extends OptionParser[Args]("ufs3") {
       fillerFileOpt("file", "f")((s, c) ⇒ c.copy(httpServerArg = c.httpServerArg.map(_.copy(file = s)))),
       logOpt
     )
+
+  // Command.BackupServer
+  cmd("backup-server")
+    .text("backup-server: start backup server")
+    .action((_, c) ⇒ c.copy(cmd = Some(BackupServer), backupServerArg = Some(BackupServerArg())))
+    .children(
+      opt[String]("host")
+        .text("the host backup server to listen on")
+        .action((s, c) ⇒ c.copy(backupServerArg = c.backupServerArg.map(_.copy(host = s)))),
+      opt[Int]("port")
+        .text("the port backup server to listen on")
+        .action((s, c) ⇒ c.copy(backupServerArg = c.backupServerArg.map(_.copy(port = s)))),
+      fillerFileOpt("file", "f")((s, c) ⇒ c.copy(backupServerArg = c.backupServerArg.map(_.copy(file = s)))),
+      logOpt
+    )
 }
