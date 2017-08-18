@@ -11,15 +11,17 @@ import akka.util.{ByteString, Timeout}
 import akka.pattern._
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.StreamConverters
-import ufs3.core.data
 
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 import scala.annotation.tailrec
 import UploadLogger.logger
 import org.slf4j.{Logger, LoggerFactory}
 import ufs3.integ.http_server.backup.BackupSingleThread
+import ufs3.interp.commons.Stack
 import ufs3.kernel.commons.{Config, UFS3}
+import ufs3.kernel.modules.App
+import ufs3.prog._
 
 object UploadLogger {
   val logger: Logger = LoggerFactory.getLogger("upload")
@@ -123,17 +125,6 @@ trait PutActor extends Actor {
   val coreConfig: Config
   val backupTarget: Option[InetSocketAddress]
 
-  lazy val ufs3: UFS3 = {
-    if (ufs3Holder.get().isDefined) ufs3Holder.get().get
-    else {
-      PutCommand.writableUfs3(coreConfig) match {
-        case Left(t) ⇒ throw t
-        case Right(b) ⇒
-          ufs3Holder.set(Some(b))
-          b
-      }
-    }
-  }
   lazy val backupThread: AtomicReference[Option[BackupSingleThread]] = {
     if (backupThreadHolder.get().isDefined) backupThreadHolder
     else {
@@ -153,18 +144,30 @@ trait PutActor extends Actor {
     case Events.Put(key, ins) ⇒
       val _sender = sender()
       // 首先需要检查是否是正在写入，如果是，则要自旋等待写入完成
+      // 预防当第一个事件还在写当时候，第二个事件就来了的情况
       @tailrec
       def write(): Unit = {
-        PutCommand._ufs3IsWriting(coreConfig, ufs3) match {
-          case Left(error) ⇒
+        Try {
+          val p = ufs3.prog.write.isWriting[App.Op](ufs3.integ.httpServer.openReadWriteUFS3(coreConfig))
+          Stack.parseApp[Boolean](p).run(coreConfig).unsafeRun()
+        } match {
+          case Failure(error) ⇒
             logger.warn(s"$error, wating 1.sec and retry to write $key")
             Thread.sleep(1000)
             write()
-          case Right(_) =>
-            PutCommand._runWithUfs3(coreConfig, key, ins, ufs3) match {
-              case Right(_) ⇒ // println("put ok")
+          case Success(true) ⇒
+            logger.warn(s"ufs3 is writing, wating 1.sec and retry to write $key")
+            Thread.sleep(1000)
+            write()
+
+          case Success(false) =>
+            val p = ufs3.prog.write[App.Op](key, ins, ufs3.integ.httpServer.openReadWriteUFS3(coreConfig))
+            Try{
+              Stack.parseApp(p).run(coreConfig).unsafeRun()
+            } match {
+              case Success(_) ⇒ // println("put ok")
                 _sender ! None
-              case Left(x) ⇒ //x.printStackTrace()
+              case Failure(x) ⇒ //x.printStackTrace()
                 _sender ! Some(x)
             }
         }
@@ -185,7 +188,6 @@ object PutActor {
 
   val backupThreadHolder: AtomicReference[Option[BackupSingleThread]] =
     new AtomicReference[Option[BackupSingleThread]](None)
-  val ufs3Holder: AtomicReference[Option[UFS3]] = new AtomicReference[Option[data.Data.UFS3]](None)
 
   def props(_coreConfig: Config, _backupTarget: Option[InetSocketAddress]): Props =
     Props(new PutActor {

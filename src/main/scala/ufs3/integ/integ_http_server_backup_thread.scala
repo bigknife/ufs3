@@ -15,13 +15,18 @@ import com.barcsys.tcp.connection.{Connection, TcpConnector}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.{Logger, LoggerFactory}
 import pharaoh.LogbackConfExtension
-import ufs3.kernel.commons.{SandwichHeadLayout, SandwichTailLayout, Config => UFS3Config}
+import ufs3.integ.httpServer
+import ufs3.interp.commons.Stack
+import ufs3.kernel.commons.{Idx, SandwichHeadLayout, SandwichTailLayout, Config => UFS3Config}
+import ufs3.kernel.exceptions.KeyNotFoundException
+import ufs3.kernel.modules.App
 
 import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
+import ufs3.prog._
 
 object BackupThreadLogger {
   val logger: Logger = LoggerFactory.getLogger("backup-thread")
@@ -77,6 +82,10 @@ trait BackupSingleThread {
 
         handleQueue(queue)
       }
+      def headBytes(magic: String, key: String, bodyLength: Long): ByteString = {
+        import ufs3.kernel.commons.Layout._
+        ByteString(magic) ++ ByteString(bodyLength.`8Bytes`.bytes) ++ ByteString(key)
+      }
       private def workFor(event: BackupEvent): Either[Throwable, Unit] = {
         logger.debug(s"Got backup event: $event")
 
@@ -84,8 +93,10 @@ trait BackupSingleThread {
         val _connection = tcpConnection.get()
         if (_connector.isDefined) {
           val md5 = MessageDigest.getInstance("md5")
-          GetCommand._idxOfKey(coreConfig, event.key) match {
-            case Right(Some(idx)) ⇒
+          Try {
+            Stack.parseApp[Option[Idx]](fetchKey[App.Op](event.key, httpServer.openReadonlyUFS3(coreConfig))).run(coreConfig).unsafeRun()
+          } match {
+            case Success(Some(idx)) ⇒
               // 1. Magic: "SAND"
               // 2. BODY_LENGTH, 8 (3#32 + 4#bodylength)
               // 3. KEY, 32
@@ -94,7 +105,7 @@ trait BackupSingleThread {
               // head is [0, 8) length, [8, 40) key
               writeUntilSuccess(_connector.get,
                 _connection,
-                BackupCommand.headBytes(magic = "SAND", event.key, bodyLength))
+                headBytes(magic = "SAND", event.key, bodyLength))
               logger.debug(s"writed backup head for key: ${event.key}")
               md5.reset()
               val out = new OutputStream {
@@ -124,24 +135,27 @@ trait BackupSingleThread {
                   super.close()
                 }
               }
-              GetCommand._runWithKey(coreConfig, event.key, out) match {
-                case x @ Right(_) ⇒
+              Try {
+                Stack.parseApp(read[App.Op](event.key, httpServer.openReadonlyUFS3(coreConfig), out)).run(coreConfig).unsafeRun()
+              } match {
+                case Success(_) ⇒
                   logger.info(s"backup successfully for ${event.key}")
                   out.close()
-                  x
-                case x @ Left(t1) ⇒
+                  Right(())
+
+                case Failure(t1) ⇒
                   logger.error(s"backup failed for ${event.key}", t1)
                   out.close()
-                  x
+                  Left(t1)
               }
 
-            case Right(None) ⇒
+            case Success(None) ⇒
               logger.error(s"${event.key} not found in ufs3")
-              Left(new IllegalArgumentException(s"${event.key} not found in ufs3"))
+              Left(KeyNotFoundException(key = event.key))
 
-            case Left(t1) ⇒
+            case Failure(t1) ⇒
               logger.error(s"backup failed for ${event.key}", t1)
-              Resp.error[Unit](t1)
+              Left(t1)
           }
         }
         else Left(new IllegalStateException("connection to back up server not connected now"))

@@ -13,10 +13,15 @@ import _root_.fs2.util._
 import cats.effect.IO
 import freestyle.fs2.Eff
 import _root_.fs2.Stream
+import ufs3.kernel.exceptions.{DuplicatedKey, UFS3IsWriting}
 
 object write {
 
   private[this] def md5hex(md: MessageDigest): String = md.digest().map("%02x".format(_)).mkString("")
+
+  def isWriting[F[_]](ufs3: UFS3)(implicit app: App[F]): FreeS[F, Boolean] = for {
+    writing ← app.store.filler.isWriting(ufs3.fillerFile.get())
+  } yield writing
 
   def apply[F[_]](key: String, in: InputStream, out: UFS3)(implicit app: App[F]): FreeS[F, String] = {
     def writeBody(md5: MessageDigest, pos: Long): FreeS[F, Long] = {
@@ -36,11 +41,10 @@ object write {
 
     for {
       writing ← app.store.filler.isWriting(out.fillerFile.get())
-      _ ← app.errorM.either(
-        Either.cond(!writing, (), new IllegalAccessException("ufs3 is writing, please retry later")))
+      _ ← app.errorM.either(Either.cond(!writing, (), UFS3IsWriting))
 
       optIdx ← app.store.fildex.fetchKey(key, out.fildexFile.get())
-      _      ← app.errorM.either(Either.cond(optIdx.isEmpty, (), new IllegalArgumentException(s"$key has existed in ufs3")))
+      _      ← app.errorM.either(Either.cond(optIdx.isEmpty, (), DuplicatedKey(key)))
       _      ← app.log.info(s"writing file of key: $key")
 
       startPos ← app.store.filler.startAppend(out.fillerFile.get())

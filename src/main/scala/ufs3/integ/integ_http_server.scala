@@ -1,5 +1,6 @@
 package ufs3.integ
 
+import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicReference
 
 import akka.actor.ActorRef
@@ -30,7 +31,7 @@ object httpServer {
     ufs3WritableHolder
       .get()
       .orElse[UFS3] {
-      val ufs3 = Some(Stack.parseApp[UFS3](open(FileMode.ReadOnly)).run(config).unsafeRun())
+      val ufs3 = Some(Stack.parseApp[UFS3](open(FileMode.ReadWrite)).run(config).unsafeRun())
       ufs3WritableHolder.set(ufs3)
       ufs3
     }
@@ -41,7 +42,7 @@ object httpServer {
     ufs3ReadonlyHolder
       .get()
       .orElse[UFS3] {
-      val ufs3 = Some(Stack.parseApp[UFS3](open(FileMode.ReadWrite)).run(config).unsafeRun())
+      val ufs3 = Some(Stack.parseApp[UFS3](open(FileMode.ReadOnly)).run(config).unsafeRun())
       ufs3ReadonlyHolder.set(ufs3)
       ufs3
     }
@@ -89,12 +90,13 @@ object httpServer {
             complete {
               def putFile(): Future[HttpResponse] = {
                 import scala.concurrent.duration._
-                implicit val timeout = Timeout(30.minutes)
+                implicit val timeout: Timeout = Timeout(24.hours)
                 val f                = actor ? UploadProxyActor.Events.UploadRequest(key, byteSource)
                 // f will be Option[Throwable]
                 import scala.concurrent.ExecutionContext.Implicits.global
                 f.map {
                   case Some(t: Throwable) ⇒
+                    t.printStackTrace()
                     HttpResponse(status = StatusCodes.InternalServerError, entity = t.getMessage)
                   case _ ⇒ HttpResponse(status = StatusCodes.OK, entity = s"$key is put")
                 }
@@ -107,14 +109,7 @@ object httpServer {
                   HttpResponse(status = StatusCodes.Conflict, entity = s"$key has existed")
                 )
               }else {
-                PutCommand._ufs3IsWriting(config, ufs3) match {
-                  case Left(error) ⇒
-                    PutLogger.logger.error("checking is writing", error)
-                    Future.successful[HttpResponse](
-                      HttpResponse(status = StatusCodes.TooManyRequests, entity = error.getMessage)
-                    )
-                  case Right(_) ⇒ putFile()
-                }
+                putFile()
               }
             }
         }
@@ -124,6 +119,12 @@ object httpServer {
 
   def apply(arg: HttpServerArg): Task[Unit] = {
     Task.delay {
+
+      def str2InetSocketAddress(str: String):InetSocketAddress = str.split(":") match {
+        case Array(host, port) ⇒ new InetSocketAddress(host, port.toInt)
+        case _ ⇒ throw new IllegalArgumentException("socket address should be host:port")
+      }
+
       val serverApp = new SimplePharaohApp {
 
         override lazy val welcome: String = """
@@ -148,8 +149,8 @@ object httpServer {
       serverApp.register(getRoute(arg.asConfig, getActor))
 
       if (arg.mode == "read-write") {
-        val putActor = UploadProxyActor.uploadProxyActorRef(config, backupTarget)(serverApp.system)
-        serverApp.register(putRoute(config, putActor))
+        val putActor = UploadProxyActor.uploadProxyActorRef(arg.asConfig, arg.backupServer.map(str2InetSocketAddress))(serverApp.system)
+        serverApp.register(putRoute(arg.asConfig, putActor))
       }
       import scala.concurrent.ExecutionContext.Implicits.global
       serverApp.listen(arg.host, arg.port) onSuccess {
@@ -157,5 +158,6 @@ object httpServer {
       }
       ()
     }
+
   }
 }
