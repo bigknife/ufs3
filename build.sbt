@@ -10,6 +10,7 @@ scalacOptions in ThisBuild ++= Seq(
   "-deprecation",
   "-Xfuture",
   "-feature",
+  "-language:higherKinds",
   "-Ywarn-dead-code",
   "-Ywarn-numeric-widen",
   "-Ywarn-value-discard",

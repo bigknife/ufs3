@@ -81,7 +81,7 @@ object byteBufferStream {
           val cached = cache(out)
           if (cached.isDefined) out.write(cached.get.list.toArray)
           //out.write(bytes)
-          Right(out.flush())
+          out.flush()
         } else throw new java.io.IOException(s"the Sandwich tail size SHOULD BE ${SandwichTailLayout.TAIL_HASH_SIZE}")
       } finally {
         // remove cache

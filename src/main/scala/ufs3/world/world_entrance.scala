@@ -86,6 +86,12 @@ object Entrance extends App { self ⇒
               } yield {
                 backupServer(backupServerArg).unsafeRun()
               }
+            case Command.Backup ⇒
+              for {
+                backArg ← x.backupArg
+              } yield  {
+                backupClient(backArg).unsafeRun()
+              }
           }
         case None ⇒
       }
