@@ -26,7 +26,7 @@ object fildex {
         import RandomAccessBlockFile._
         import ufs3.interp.filler.RandomFillerFile._
         val rabf: RandomAccessBlockFile = bf
-        var rff: RandomFillerFile = ff
+        val rff: RandomFillerFile = ff
 
         require(rabf.size() >= FildexFileLayout.HEAD_SIZE,
                 s"fildex file length should greater than ${FildexFileLayout.HEAD_SIZE}")
